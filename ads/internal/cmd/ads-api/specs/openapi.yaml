@@ -1,0 +1,188 @@
+openapi: "3.0.3"
+
+info:
+  title: Ads API
+  description: Classified ads — list, read, and create ads.
+  version: "1.0.0"
+
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      operationId: healthCheck
+      tags: [infra]
+      responses:
+        "200":
+          description: Service is up
+
+  /ads:
+    get:
+      summary: List ads
+      operationId: listAds
+      tags: [ads]
+      parameters:
+        - name: title
+          in: query
+          description: Case-insensitive substring match on the ad title.
+          schema:
+            type: string
+          example: bike
+        - name: user_id
+          in: query
+          description: Filter ads belonging to this owner.
+          schema:
+            type: string
+          example: "00000000-0000-0000-0000-000000000001"
+        - name: min_price_cents
+          in: query
+          description: Inclusive lower bound on the price (in cents). 0 means no lower bound.
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+          example: 5000
+        - name: max_price_cents
+          in: query
+          description: Inclusive upper bound on the price (in cents). 0 means no upper bound.
+          schema:
+            type: integer
+            format: int64
+            minimum: 0
+          example: 50000
+      responses:
+        "200":
+          description: List of matching ads (may be empty).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ListAdsResponse"
+        "400":
+          description: Invalid query parameter (e.g. non-numeric price).
+
+    post:
+      summary: Create an ad
+      operationId: createAd
+      tags: [ads]
+      security:
+        - userID: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAdBody"
+      responses:
+        "201":
+          description: Ad created. The body contains the generated identifier.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateAdResponse"
+        "400":
+          description: Malformed or unknown request body field.
+        "401":
+          description: Missing Authorization header.
+        "500":
+          description: Unexpected server error.
+
+  /ads/{adID}:
+    get:
+      summary: Get an ad by ID
+      operationId: getAd
+      tags: [ads]
+      parameters:
+        - name: adID
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          example: 1
+      responses:
+        "200":
+          description: The requested ad.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Ad"
+        "400":
+          description: adID is not a valid integer.
+        "404":
+          description: No ad exists with this ID.
+        "500":
+          description: Unexpected server error.
+
+components:
+  securitySchemes:
+    userID:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: The caller's user ID. No token validation is performed — the value is used as-is as the owner identifier.
+
+  schemas:
+    Ad:
+      type: object
+      required: [id, title, price_cents, photo_url, user_id, created_at]
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        title:
+          type: string
+          example: mountain bike
+        price_cents:
+          type: integer
+          format: int64
+          description: Price in euro cents.
+          example: 15000
+        photo_url:
+          type: string
+          example: https://example.com/bike.jpg
+        user_id:
+          type: string
+          example: "00000000-0000-0000-0000-000000000001"
+        created_at:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:00:00Z"
+
+    ListAdsResponse:
+      type: object
+      required: [ads]
+      properties:
+        ads:
+          type: array
+          items:
+            $ref: "#/components/schemas/Ad"
+
+    CreateAdBody:
+      type: object
+      required: [title, price_cents, photo_url]
+      properties:
+        title:
+          type: string
+          example: mountain bike
+        price_cents:
+          type: integer
+          format: int64
+          description: Price in euro cents.
+          example: 15000
+        photo_url:
+          type: string
+          example: https://example.com/bike.jpg
+
+    CreateAdResponse:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Generated identifier of the new ad.
+          example: 42

@@ -1,0 +1,49 @@
+services:
+  ads-api:
+    build:
+      context: .
+      dockerfile: ads/internal/cmd/ads-api/Dockerfile
+    environment:
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: postgres://ads:ads@ads-database:5432/ads?sslmode=disable
+    ports:
+      - "8080:8080"
+    depends_on:
+      ads-database:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8080/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  ads-database:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ads
+      POSTGRES_PASSWORD: ads
+      POSTGRES_DB: ads
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./ads/internal/cmd/ads-api/dao/postgres/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ads -d ads"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+
+#  users-api:
+#    build:
+#      context: .
+#      dockerfile: users/internal/cmd/users-api/Dockerfile
+#    environment:
+#      HTTP_ADDR: ":8081"
+#    ports:
+#      - "8081:8081"
+#    healthcheck:
+#      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:8081/health"]
+#      interval: 2s
+#      timeout: 2s
+#      retries: 20
