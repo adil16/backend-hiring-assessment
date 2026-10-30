@@ -20,7 +20,7 @@ func TestGetAdByID(t *testing.T) {
 	t.Run("nominal", func(t *testing.T) {
 		m := mockdao.New(t)
 		want := domain.Ad{ID: 42, Title: "bike", Price: 5000, UserID: "user-1"}
-		m.On("GetAdByID", ctx, mock.Anything).Return(want, nil)
+		m.On("GetAdByID", ctx, want.ID).Return(want, nil)
 
 		got, err := usecase.NewGetAdByIDFunc(m)(ctx, 42)
 

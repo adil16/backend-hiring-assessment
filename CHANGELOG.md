@@ -8,6 +8,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 | Type | Description |
 |---|---|
+| Fixed | Fixed GetAdByID usecase. |
 | Added | Introduced project versioning using a dedicated VERSION file. |
 | Added | Added build-time version information injection using Go linker flags. |
 | Added | Introduced a CHANGELOG.md to document project changes and releases. |
