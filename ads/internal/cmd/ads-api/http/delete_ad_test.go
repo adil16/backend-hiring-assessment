@@ -1,0 +1,125 @@
+package http
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	adsdao "github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/dao"
+	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/domain"
+	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/usecase"
+	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/common/middleware"
+)
+
+func newDeleteAdServer(fn usecase.DeleteAdByIDFunc) *httptest.Server {
+	mux := http.NewServeMux()
+	mux.Handle("DELETE /ads/{adID}", middleware.RequireAuth(handlerDeleteAd(fn)))
+	return httptest.NewServer(mux)
+}
+
+func TestHandlerDeleteAd(t *testing.T) {
+
+	t.Run("returns 200 on success", func(t *testing.T) {
+		srv := newDeleteAdServer(func(_ context.Context, id domain.AdID) error {
+			return nil
+		})
+		defer srv.Close()
+
+		req, err := http.NewRequest(
+			http.MethodDelete,
+			srv.URL+"/ads/42",
+			nil,
+		)
+		req.Header.Set("Authorization", "123")
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+	})
+
+	t.Run("returns 401 when Authorization header is missing", func(t *testing.T) {
+		srv := newDeleteAdServer(func(_ context.Context, id domain.AdID) error {
+			return nil
+		})
+		defer srv.Close()
+
+		req, err := http.NewRequest(
+			http.MethodDelete,
+			srv.URL+"/ads/42",
+			nil,
+		)
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+	})
+
+	t.Run("returns 400 when adID is not a number", func(t *testing.T) {
+		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID) error {
+			t.Fatal("usecase should not be called")
+			return nil
+		})
+		defer srv.Close()
+
+		req, err := http.NewRequest(
+			http.MethodDelete,
+			srv.URL+"/ads/not-a-number",
+			nil,
+		)
+		req.Header.Set("Authorization", "123")
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
+	t.Run("returns 404 when ad does not exist", func(t *testing.T) {
+		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID) error {
+			return adsdao.ErrNotFound
+		})
+		defer srv.Close()
+
+		req, err := http.NewRequest(
+			http.MethodDelete,
+			srv.URL+"/ads/99",
+			nil,
+		)
+		req.Header.Set("Authorization", "123")
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
+	})
+
+	t.Run("returns 500 on unexpected usecase error", func(t *testing.T) {
+		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID) error {
+			return errors.New("db down")
+		})
+		defer srv.Close()
+
+		req, err := http.NewRequest(
+			http.MethodDelete,
+			srv.URL+"/ads/1",
+			nil,
+		)
+		req.Header.Set("Authorization", "123")
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+	})
+}

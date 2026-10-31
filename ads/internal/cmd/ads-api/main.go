@@ -43,6 +43,7 @@ func run() error {
 		CreateAd: usecase.NewCreateAdFunc(adDAO),
 		GetAd:    usecase.NewGetAdByIDFunc(adDAO),
 		ListAds:  usecase.NewListAdsFunc(adDAO),
+		DeleteAd: usecase.NewDeleteAdByIDFunc(adDAO),
 	})
 
 	return httpserver.Run(ctx, cfg.HTTPAddr, router)

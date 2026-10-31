@@ -52,6 +52,13 @@ func (m *Mock) CreateAd(ctx context.Context, req adsdao.CreateAdRequest) (domain
 	return adID, args.Error(1)
 }
 
+// DeleteAdByID returns the error set on the mock.
+func (m *Mock) DeleteAdByID(ctx context.Context, id domain.AdID) error {
+	args := m.Called(ctx, id)
+
+	return args.Error(0)
+}
+
 // Begin returns the mock itself as the transaction, so expectations stay set on a single object, and the error set on the mock.
 func (m *Mock) Begin(ctx context.Context) (adsdao.Tx, error) {
 	args := m.Called(ctx)
