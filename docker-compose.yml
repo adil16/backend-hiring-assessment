@@ -3,6 +3,9 @@ services:
     build:
       context: .
       dockerfile: ads/internal/cmd/ads-api/Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     environment:
       HTTP_ADDR: ":8080"
       DATABASE_URL: postgres://ads:ads@ads-database:5432/ads?sslmode=disable

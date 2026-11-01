@@ -9,9 +9,16 @@ import (
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/http"
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/usecase"
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/common/httpserver"
+	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/common/version"
 )
 
 func main() {
+	slog.Info("starting ads-api",
+		"version", version.Version,
+		"commit", version.GitCommit,
+		"build_date", version.BuildDate,
+	)
+
 	if err := run(); err != nil {
 		slog.Error("api stopped", "error", err)
 		os.Exit(1)
