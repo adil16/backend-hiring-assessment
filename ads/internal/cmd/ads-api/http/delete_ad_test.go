@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -24,7 +25,9 @@ func newDeleteAdServer(fn usecase.DeleteAdByIDFunc) *httptest.Server {
 func TestHandlerDeleteAd(t *testing.T) {
 
 	t.Run("returns 200 on success", func(t *testing.T) {
-		srv := newDeleteAdServer(func(_ context.Context, id domain.AdID) error {
+		srv := newDeleteAdServer(func(_ context.Context, id domain.AdID, userID domain.UserID) error {
+			assert.Equal(t, domain.AdID(42), id)
+			assert.Equal(t, domain.UserID("123"), userID)
 			return nil
 		})
 		defer srv.Close()
@@ -44,7 +47,7 @@ func TestHandlerDeleteAd(t *testing.T) {
 	})
 
 	t.Run("returns 401 when Authorization header is missing", func(t *testing.T) {
-		srv := newDeleteAdServer(func(_ context.Context, id domain.AdID) error {
+		srv := newDeleteAdServer(func(_ context.Context, id domain.AdID, userID domain.UserID) error {
 			return nil
 		})
 		defer srv.Close()
@@ -63,7 +66,7 @@ func TestHandlerDeleteAd(t *testing.T) {
 	})
 
 	t.Run("returns 400 when adID is not a number", func(t *testing.T) {
-		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID) error {
+		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID, userID domain.UserID) error {
 			t.Fatal("usecase should not be called")
 			return nil
 		})
@@ -84,7 +87,7 @@ func TestHandlerDeleteAd(t *testing.T) {
 	})
 
 	t.Run("returns 404 when ad does not exist", func(t *testing.T) {
-		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID) error {
+		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID, userID domain.UserID) error {
 			return adsdao.ErrNotFound
 		})
 		defer srv.Close()
@@ -103,8 +106,28 @@ func TestHandlerDeleteAd(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	})
 
+	t.Run("returns 403 when ad does not belong to user", func(t *testing.T) {
+		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID, userID domain.UserID) error {
+			return fmt.Errorf("unable to delete ad 99: user 123 is not the owner: %w", domain.ErrForbidden)
+		})
+		defer srv.Close()
+
+		req, err := http.NewRequest(
+			http.MethodDelete,
+			srv.URL+"/ads/99",
+			nil,
+		)
+		req.Header.Set("Authorization", "123")
+
+		resp, err := http.DefaultClient.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+	})
+
 	t.Run("returns 500 on unexpected usecase error", func(t *testing.T) {
-		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID) error {
+		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID, userID domain.UserID) error {
 			return errors.New("db down")
 		})
 		defer srv.Close()
