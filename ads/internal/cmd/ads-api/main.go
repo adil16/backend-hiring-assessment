@@ -5,11 +5,13 @@ import (
 	"log/slog"
 	"os"
 
+	usersadapter "github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/adapter/users"
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/dao/postgres"
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/http"
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/usecase"
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/common/httpserver"
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/common/version"
+	usersapi "github.mpi-internal.com/leboncoin/backend-hiring-assessment/users/pkg/api"
 )
 
 func main() {
@@ -39,9 +41,12 @@ func run() error {
 		}
 	}()
 
+	userAPIClient := usersapi.NewClient(cfg.IdentityURL, cfg.IdentityTimeout)
+	userClient := usersadapter.New(userAPIClient)
+
 	router := http.NewRouter(http.Usecases{
 		CreateAd: usecase.NewCreateAdFunc(adDAO),
-		GetAd:    usecase.NewGetAdByIDFunc(adDAO),
+		GetAd:    usecase.NewGetAdByIDFunc(adDAO, userClient),
 		ListAds:  usecase.NewListAdsFunc(adDAO),
 		DeleteAd: usecase.NewDeleteAdByIDFunc(adDAO),
 	})

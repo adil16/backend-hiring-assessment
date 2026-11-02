@@ -108,7 +108,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/Ad"
+                $ref: "#/components/schemas/AdWithUsername"
         "400":
           description: adID is not a valid integer.
         "404":
@@ -178,6 +178,15 @@ components:
           type: string
           format: date-time
           example: "2024-01-15T10:00:00Z"
+    AdWithUsername:
+      allOf:
+        - $ref: "#/components/schemas/Ad"
+        - type: object
+          properties:
+            username:
+              type: string
+              description: Nickname of the user who created the ad, when available.
+              example: alice
 
     ListAdsResponse:
       type: object

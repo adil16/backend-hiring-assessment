@@ -12,39 +12,108 @@ import (
 	mockdao "github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/dao/mock"
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/domain"
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/usecase"
+	usersclient "github.mpi-internal.com/leboncoin/backend-hiring-assessment/users/pkg"
+	usersmock "github.mpi-internal.com/leboncoin/backend-hiring-assessment/users/pkg/mock"
 )
 
 func TestGetAdByID(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("nominal", func(t *testing.T) {
-		m := mockdao.New(t)
-		want := domain.Ad{ID: 42, Title: "bike", Price: 5000, UserID: "user-1"}
-		m.On("GetAdByID", ctx, want.ID).Return(want, nil)
+		daoMock := mockdao.New(t)
+		userMock := usersmock.New(t)
 
-		got, err := usecase.NewGetAdByIDFunc(m)(ctx, 42)
+		ad := domain.Ad{
+			ID:     42,
+			Title:  "bike",
+			Price:  5000,
+			UserID: "user-1",
+		}
+
+		user := usersclient.User{
+			UserID:   "user-1",
+			Nickname: "alice",
+		}
+
+		want := domain.AdWithUsername{
+			Ad:       ad,
+			Username: user.Nickname,
+		}
+
+		daoMock.On("GetAdByID", ctx, ad.ID).Return(ad, nil).Once()
+		userMock.On("GetUserByID", ctx, ad.UserID).Return(user, nil).Once()
+
+		got, err := usecase.NewGetAdByIDFunc(daoMock, userMock)(ctx, 42)
 
 		require.NoError(t, err)
 		assert.Equal(t, want, got)
 	})
 
-	t.Run("error no ad found", func(t *testing.T) {
-		m := mockdao.New(t)
-		m.On("GetAdByID", ctx, mock.Anything).Return(domain.Ad{}, adsdao.ErrNotFound)
+	t.Run("returns error when ad is not found", func(t *testing.T) {
+		daoMock := mockdao.New(t)
+		userMock := usersmock.New(t)
 
-		_, err := usecase.NewGetAdByIDFunc(m)(ctx, 99)
+		daoMock.On("GetAdByID", ctx, domain.AdID(99)).Return(domain.Ad{}, adsdao.ErrNotFound).Once()
 
-		require.Error(t, err)
-		assert.ErrorIs(t, err, adsdao.ErrNotFound)
+		_, err := usecase.NewGetAdByIDFunc(daoMock, userMock)(ctx, 99)
+
+		require.ErrorIs(t, err, adsdao.ErrNotFound)
+		userMock.AssertNotCalled(t, "GetUserByID", mock.Anything, mock.Anything)
 	})
 
-	t.Run("error from dao", func(t *testing.T) {
-		m := mockdao.New(t)
+	t.Run("returns error when dao fails", func(t *testing.T) {
+		daoMock := mockdao.New(t)
+		userMock := usersmock.New(t)
+
 		dbErr := errors.New("connection reset")
-		m.On("GetAdByID", ctx, mock.Anything).Return(domain.Ad{}, dbErr)
 
-		_, err := usecase.NewGetAdByIDFunc(m)(ctx, 1)
+		daoMock.On("GetAdByID", ctx, domain.AdID(1)).Return(domain.Ad{}, dbErr).Once()
 
-		assert.ErrorIs(t, err, dbErr)
+		_, err := usecase.NewGetAdByIDFunc(daoMock, userMock)(ctx, 1)
+
+		require.ErrorIs(t, err, dbErr)
+		userMock.AssertNotCalled(t, "GetUserByID", mock.Anything, mock.Anything)
+	})
+
+	t.Run("returns ad without username when user is not found", func(t *testing.T) {
+		daoMock := mockdao.New(t)
+		userMock := usersmock.New(t)
+
+		ad := domain.Ad{
+			ID:     42,
+			Title:  "bike",
+			Price:  5000,
+			UserID: "user-1",
+		}
+
+		daoMock.On("GetAdByID", ctx, ad.ID).Return(ad, nil).Once()
+		userMock.On("GetUserByID", ctx, ad.UserID).Return(usersclient.User{}, domain.ErrUserNotFound).Once()
+
+		got, err := usecase.NewGetAdByIDFunc(daoMock, userMock)(ctx, ad.ID)
+
+		require.NoError(t, err)
+		assert.Equal(t, domain.AdWithUsername{Ad: ad}, got)
+	})
+
+	t.Run("returns error when user service fails", func(t *testing.T) {
+		daoMock := mockdao.New(t)
+		userMock := usersmock.New(t)
+
+		ad := domain.Ad{
+			ID:     42,
+			Title:  "bike",
+			Price:  5000,
+			UserID: "user-1",
+		}
+
+		wantErr := errors.New("connection reset")
+
+		daoMock.On("GetAdByID", ctx, ad.ID).Return(ad, nil).Once()
+		userMock.On("GetUserByID", ctx, ad.UserID).Return(usersclient.User{}, wantErr).Once()
+
+		got, err := usecase.NewGetAdByIDFunc(daoMock, userMock)(ctx, ad.ID)
+
+		require.ErrorIs(t, err, wantErr)
+		assert.Equal(t, domain.AdWithUsername{}, got)
 	})
 }

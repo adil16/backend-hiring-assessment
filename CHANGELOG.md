@@ -8,6 +8,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 | Type | Description |
 |---|---|
+| Changed | Added field username to get ad by ID response. |
 | Added | Added delete ad by ID feature. |
 | Fixed | Fixed GetAdByID usecase. |
 | Added | Introduced project versioning using a dedicated VERSION file. |

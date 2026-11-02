@@ -27,15 +27,18 @@ func TestHandlerGetAd(t *testing.T) {
 	createdAt := time.Date(2024, 1, 15, 10, 0, 0, 0, time.UTC)
 
 	t.Run("returns 200 with ad JSON on success", func(t *testing.T) {
-		ad := domain.Ad{
-			ID:        42,
-			Title:     "mountain bike",
-			Price:     15000,
-			PhotoURL:  "https://example.com/bike.jpg",
-			UserID:    "user-1",
-			CreatedAt: createdAt,
+		ad := domain.AdWithUsername{
+			Ad: domain.Ad{
+				ID:        42,
+				Title:     "mountain bike",
+				Price:     15000,
+				PhotoURL:  "https://example.com/bike.jpg",
+				UserID:    "user-1",
+				CreatedAt: createdAt,
+			},
+			Username: "alice",
 		}
-		srv := newGetAdServer(func(_ context.Context, id domain.AdID) (domain.Ad, error) {
+		srv := newGetAdServer(func(_ context.Context, id domain.AdID) (domain.AdWithUsername, error) {
 			return ad, nil
 		})
 		defer srv.Close()
@@ -54,13 +57,14 @@ func TestHandlerGetAd(t *testing.T) {
 		assert.Equal(t, int64(15000), got.PriceCents)
 		assert.Equal(t, "https://example.com/bike.jpg", got.PhotoURL)
 		assert.Equal(t, "user-1", got.UserID)
+		assert.Equal(t, "alice", got.Username)
 		assert.Equal(t, createdAt, got.CreatedAt)
 	})
 
 	t.Run("returns 400 when adID is not a number", func(t *testing.T) {
-		srv := newGetAdServer(func(_ context.Context, _ domain.AdID) (domain.Ad, error) {
+		srv := newGetAdServer(func(_ context.Context, _ domain.AdID) (domain.AdWithUsername, error) {
 			t.Fatal("usecase should not be called")
-			return domain.Ad{}, nil
+			return domain.AdWithUsername{}, nil
 		})
 		defer srv.Close()
 
@@ -72,8 +76,8 @@ func TestHandlerGetAd(t *testing.T) {
 	})
 
 	t.Run("returns 404 when ad does not exist", func(t *testing.T) {
-		srv := newGetAdServer(func(_ context.Context, _ domain.AdID) (domain.Ad, error) {
-			return domain.Ad{}, adsdao.ErrNotFound
+		srv := newGetAdServer(func(_ context.Context, _ domain.AdID) (domain.AdWithUsername, error) {
+			return domain.AdWithUsername{}, adsdao.ErrNotFound
 		})
 		defer srv.Close()
 
@@ -84,9 +88,37 @@ func TestHandlerGetAd(t *testing.T) {
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	})
 
+	t.Run("returns 200 without username when user does not exist", func(t *testing.T) {
+		ad := domain.Ad{
+			ID:     99,
+			Title:  "bike",
+			Price:  5000,
+			UserID: "user-1",
+		}
+
+		srv := newGetAdServer(func(_ context.Context, _ domain.AdID) (domain.AdWithUsername, error) {
+			return domain.AdWithUsername{Ad: ad}, nil
+		})
+		defer srv.Close()
+
+		resp, err := http.Get(srv.URL + "/ads/99")
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var body map[string]any
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+
+		assert.Equal(t, float64(99), body["id"])
+		assert.Equal(t, "bike", body["title"])
+		assert.Equal(t, "user-1", body["user_id"])
+		assert.NotContains(t, body, "username")
+	})
+
 	t.Run("returns 500 on unexpected usecase error", func(t *testing.T) {
-		srv := newGetAdServer(func(_ context.Context, _ domain.AdID) (domain.Ad, error) {
-			return domain.Ad{}, errors.New("db down")
+		srv := newGetAdServer(func(_ context.Context, _ domain.AdID) (domain.AdWithUsername, error) {
+			return domain.AdWithUsername{}, errors.New("db down")
 		})
 		defer srv.Close()
 
@@ -99,9 +131,9 @@ func TestHandlerGetAd(t *testing.T) {
 
 	t.Run("passes the correct ad ID to the usecase", func(t *testing.T) {
 		var receivedID domain.AdID
-		srv := newGetAdServer(func(_ context.Context, id domain.AdID) (domain.Ad, error) {
+		srv := newGetAdServer(func(_ context.Context, id domain.AdID) (domain.AdWithUsername, error) {
 			receivedID = id
-			return domain.Ad{ID: id}, nil
+			return domain.AdWithUsername{Ad: domain.Ad{ID: id}}, nil
 		})
 		defer srv.Close()
 

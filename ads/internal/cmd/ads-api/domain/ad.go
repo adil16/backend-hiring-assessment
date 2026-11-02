@@ -23,5 +23,11 @@ type Ad struct {
 	CreatedAt time.Time
 }
 
+// AdWithUsername represents an ad enriched with the user's nickname.
+type AdWithUsername struct {
+	Ad
+	Username string
+}
+
 // String returns the decimal representation of the identifier.
 func (id AdID) String() string { return strconv.FormatInt(int64(id), 10) }
