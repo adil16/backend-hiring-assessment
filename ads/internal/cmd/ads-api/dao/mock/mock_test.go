@@ -24,7 +24,7 @@ func TestMock_SearchAds(t *testing.T) {
 
 		got, err := m.SearchAds(ctx, req)
 
-		require.Error(t, err)
+		require.NoError(t, err)
 		assert.Equal(t, want, got)
 	})
 
