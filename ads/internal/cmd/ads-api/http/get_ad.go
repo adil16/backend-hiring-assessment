@@ -12,13 +12,14 @@ import (
 )
 
 type getAdResponse struct {
-	ID         int64     `json:"id"`
-	Title      string    `json:"title"`
-	PriceCents int64     `json:"price_cents"`
-	PhotoURL   string    `json:"photo_url"`
-	UserID     string    `json:"user_id"`
-	Username   string    `json:"username,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID         int64       `json:"id"`
+	Title      string      `json:"title"`
+	PriceCents int64       `json:"price_cents"`
+	Price      json.Number `json:"price"`
+	PhotoURL   string      `json:"photo_url"`
+	UserID     string      `json:"user_id"`
+	Username   string      `json:"username,omitempty"`
+	CreatedAt  time.Time   `json:"created_at"`
 }
 
 func adToGetAdResponse(a domain.AdWithUsername) getAdResponse {
@@ -26,6 +27,7 @@ func adToGetAdResponse(a domain.AdWithUsername) getAdResponse {
 		ID:         int64(a.ID),
 		Title:      a.Title,
 		PriceCents: a.Price,
+		Price:      centsToPrice(a.Price),
 		PhotoURL:   a.PhotoURL,
 		UserID:     a.UserID.String(),
 		Username:   a.Username,

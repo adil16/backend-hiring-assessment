@@ -44,10 +44,24 @@ func TestHandlerListAds(t *testing.T) {
 		var got listAdsResponse
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
 		require.Len(t, got.Ads, 2)
+
+		// First ad
 		assert.Equal(t, int64(1), got.Ads[0].ID)
 		assert.Equal(t, "bike", got.Ads[0].Title)
 		assert.Equal(t, int64(5000), got.Ads[0].PriceCents)
+		assert.Equal(t, "50.00", got.Ads[0].Price.String())
+		assert.Equal(t, "https://example.com/bike.jpg", got.Ads[0].PhotoURL)
+		assert.Equal(t, "user-1", got.Ads[0].UserID)
+		assert.Equal(t, createdAt, got.Ads[0].CreatedAt)
+
+		// Second ad
 		assert.Equal(t, int64(2), got.Ads[1].ID)
+		assert.Equal(t, "scooter", got.Ads[1].Title)
+		assert.Equal(t, int64(12000), got.Ads[1].PriceCents)
+		assert.Equal(t, "120.00", got.Ads[1].Price.String())
+		assert.Equal(t, "https://example.com/scooter.jpg", got.Ads[1].PhotoURL)
+		assert.Equal(t, "user-2", got.Ads[1].UserID)
+		assert.Equal(t, createdAt, got.Ads[1].CreatedAt)
 	})
 
 	t.Run("returns 200 with empty ads array when no results", func(t *testing.T) {
@@ -84,6 +98,36 @@ func TestHandlerListAds(t *testing.T) {
 		assert.Equal(t, domain.UserID("user-3"), received.OwnerID)
 		assert.Equal(t, int64(1000), received.MinPriceCents)
 		assert.Equal(t, int64(50000), received.MaxPriceCents)
+	})
+
+	t.Run("returns price as a JSON number alongside price_cents", func(t *testing.T) {
+		ads := []domain.Ad{
+			{ID: 1, Title: "bike", Price: 1234},
+		}
+
+		srv := newListAdsServer(func(_ context.Context, _ usecase.ListAdsRequest) ([]domain.Ad, error) {
+			return ads, nil
+		})
+		defer srv.Close()
+
+		resp, err := http.Get(srv.URL + "/ads")
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var body struct {
+			Ads []struct {
+				Price      json.RawMessage `json:"price"`
+				PriceCents int64           `json:"price_cents"`
+			} `json:"ads"`
+		}
+
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+		require.Len(t, body.Ads, 1)
+
+		assert.Equal(t, `12.34`, string(body.Ads[0].Price))
+		assert.Equal(t, int64(1234), body.Ads[0].PriceCents)
 	})
 
 	t.Run("returns 400 when min_price_cents is not a number", func(t *testing.T) {

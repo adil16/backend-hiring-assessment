@@ -42,7 +42,7 @@ func postJSON(t *testing.T, url string, body any, authHeader string) *http.Respo
 func TestHandlerCreateAd(t *testing.T) {
 	validBody := createAdBody{
 		Title:      "mountain bike",
-		PriceCents: 15000,
+		PriceCents: new(int64(15000)),
 		PhotoURL:   "https://example.com/bike.jpg",
 	}
 
@@ -124,4 +124,253 @@ func TestHandlerCreateAd(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	})
+}
+
+func TestHandlerCreateAd_Price(t *testing.T) {
+	tests := []struct {
+		name           string
+		body           any
+		wantStatus     int
+		wantPriceCents int64
+		wantCalled     bool
+	}{
+		{
+			name: "accepts legacy price_cents",
+			body: map[string]any{
+				"title":       "bike",
+				"price_cents": 1234,
+			},
+			wantStatus:     http.StatusCreated,
+			wantPriceCents: 1234,
+			wantCalled:     true,
+		},
+		{
+			name: "accepts price in euros",
+			body: map[string]any{
+				"title": "bike",
+				"price": json.Number("12.34"),
+			},
+			wantStatus:     http.StatusCreated,
+			wantPriceCents: 1234,
+			wantCalled:     true,
+		},
+		{
+			name: "accepts zero euros",
+			body: map[string]any{
+				"title": "bike",
+				"price": 0,
+			},
+			wantStatus:     http.StatusCreated,
+			wantPriceCents: 0,
+			wantCalled:     true,
+		},
+		{
+			name: "rejects both price fields",
+			body: map[string]any{
+				"title":       "bike",
+				"price":       12.34,
+				"price_cents": 1234,
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "rejects missing price",
+			body: map[string]any{
+				"title": "bike",
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "rejects null price",
+			body: map[string]any{
+				"title": "bike",
+				"price": nil,
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "rejects sub-cent precision",
+			body: map[string]any{
+				"title": "bike",
+				"price": json.Number("12.345"),
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "rejects negative euros",
+			body: map[string]any{
+				"title": "bike",
+				"price": -1,
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "rejects price overflow",
+			body: map[string]any{
+				"title": "bike",
+				"price": json.Number("92233720368547758.08"),
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name: "rejects non-numeric price",
+			body: map[string]any{
+				"title": "bike",
+				"price": "not-a-number",
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			called := false
+
+			srv := newCreateAdServer(func(
+				_ context.Context,
+				req usecase.CreateAdRequest,
+			) (domain.AdID, error) {
+				called = true
+				assert.Equal(t, tt.wantPriceCents, req.PriceCents)
+				return domain.AdID(7), nil
+			})
+			defer srv.Close()
+
+			resp := postJSON(t, srv.URL+"/ads", tt.body, "user-1")
+			defer resp.Body.Close()
+
+			assert.Equal(t, tt.wantStatus, resp.StatusCode)
+			assert.Equal(t, tt.wantCalled, called)
+		})
+	}
+}
+
+func TestCreateAdBody_PriceInCents(t *testing.T) {
+	tests := []struct {
+		name      string
+		body      createAdBody
+		wantCents int64
+		wantErr   bool
+	}{
+		{
+			name: "legacy price in cents",
+			body: createAdBody{
+				PriceCents: ptrInt64(1234),
+			},
+			wantCents: 1234,
+		},
+		{
+			name: "legacy zero cents",
+			body: createAdBody{
+				PriceCents: ptrInt64(0),
+			},
+			wantCents: 0,
+		},
+		{
+			name: "euros with two decimals",
+			body: createAdBody{
+				Price: ptrJSONNumber("12.34"),
+			},
+			wantCents: 1234,
+		},
+		{
+			name: "euros with one decimal",
+			body: createAdBody{
+				Price: ptrJSONNumber("12.3"),
+			},
+			wantCents: 1230,
+		},
+		{
+			name: "euros with trailing zeros",
+			body: createAdBody{
+				Price: ptrJSONNumber("12.3400"),
+			},
+			wantCents: 1234,
+		},
+		{
+			name: "one cent",
+			body: createAdBody{
+				Price: ptrJSONNumber("0.01"),
+			},
+			wantCents: 1,
+		},
+		{
+			name: "zero euros",
+			body: createAdBody{
+				Price: ptrJSONNumber("0"),
+			},
+			wantCents: 0,
+		},
+		{
+			name: "maximum representable cents",
+			body: createAdBody{
+				Price: ptrJSONNumber("92233720368547758.07"),
+			},
+			wantCents: int64(9223372036854775807),
+		},
+		{
+			name: "both price fields provided",
+			body: createAdBody{
+				Price:      ptrJSONNumber("12.34"),
+				PriceCents: ptrInt64(1234),
+			},
+			wantErr: true,
+		},
+		{
+			name:    "missing price",
+			body:    createAdBody{},
+			wantErr: true,
+		},
+		{
+			name: "fraction of a cent",
+			body: createAdBody{
+				Price: ptrJSONNumber("12.345"),
+			},
+			wantErr: true,
+		},
+		{
+			name: "negative euros",
+			body: createAdBody{
+				Price: ptrJSONNumber("-1"),
+			},
+			wantErr: true,
+		},
+		{
+			name: "overflow",
+			body: createAdBody{
+				Price: ptrJSONNumber("92233720368547758.08"),
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid decimal",
+			body: createAdBody{
+				Price: ptrJSONNumber("not-a-number"),
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.body.priceInCents()
+
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantCents, got)
+		})
+	}
+}
+
+func ptrInt64(v int64) *int64 {
+	return &v
+}
+
+func ptrJSONNumber(v string) *json.Number {
+	n := json.Number(v)
+	return &n
 }

@@ -55,6 +55,7 @@ func TestHandlerGetAd(t *testing.T) {
 		assert.Equal(t, int64(42), got.ID)
 		assert.Equal(t, "mountain bike", got.Title)
 		assert.Equal(t, int64(15000), got.PriceCents)
+		assert.Equal(t, "150.00", got.Price.String())
 		assert.Equal(t, "https://example.com/bike.jpg", got.PhotoURL)
 		assert.Equal(t, "user-1", got.UserID)
 		assert.Equal(t, "alice", got.Username)
@@ -113,7 +114,36 @@ func TestHandlerGetAd(t *testing.T) {
 		assert.Equal(t, float64(99), body["id"])
 		assert.Equal(t, "bike", body["title"])
 		assert.Equal(t, "user-1", body["user_id"])
+		assert.Equal(t, float64(50), body["price"])
+		assert.Equal(t, float64(5000), body["price_cents"])
 		assert.NotContains(t, body, "username")
+	})
+
+	t.Run("returns price as a JSON number alongside price_cents", func(t *testing.T) {
+		ad := domain.AdWithUsername{
+			Ad: domain.Ad{
+				ID:    42,
+				Title: "bike",
+				Price: 1234,
+			},
+		}
+
+		srv := newGetAdServer(func(_ context.Context, _ domain.AdID) (domain.AdWithUsername, error) {
+			return ad, nil
+		})
+		defer srv.Close()
+
+		resp, err := http.Get(srv.URL + "/ads/42")
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		var body map[string]json.RawMessage
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&body))
+
+		assert.JSONEq(t, `12.34`, string(body["price"]))
+		assert.JSONEq(t, `1234`, string(body["price_cents"]))
 	})
 
 	t.Run("returns 500 on unexpected usecase error", func(t *testing.T) {
