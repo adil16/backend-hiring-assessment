@@ -75,6 +75,10 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/CreateAdBody"
+            example:
+              title: mountain bike
+              price: 149.99
+              photo_url: https://example.com/bike.jpg
       responses:
         "201":
           description: Ad created. The body contains the generated identifier.
@@ -154,7 +158,7 @@ components:
   schemas:
     Ad:
       type: object
-      required: [id, title, price_cents, photo_url, user_id, created_at]
+      required: [id, title, price, price_cents, photo_url, user_id, created_at]
       properties:
         id:
           type: integer
@@ -163,11 +167,18 @@ components:
         title:
           type: string
           example: mountain bike
+        price:
+          type: number
+          description: Price in euros, with a maximum precision of two decimal places.
+          example: 149.99
         price_cents:
           type: integer
           format: int64
-          description: Price in euro cents.
-          example: 15000
+          deprecated: true
+          description:  |
+            Price in euro cents. Deprecated in favor of `price`.
+            Kept for backward compatibility.
+          example: 14999
         photo_url:
           type: string
           example: https://example.com/bike.jpg
@@ -199,16 +210,24 @@ components:
 
     CreateAdBody:
       type: object
-      required: [title, price_cents, photo_url]
+      required: [title, photo_url]
+      oneOf:
+        - required: [price]
+        - required: [price_cents]
       properties:
         title:
           type: string
           example: mountain bike
+        price:
+          type: number
+          description: Price in euros, with a maximum precision of two decimal places.
+          example: 149.99
         price_cents:
           type: integer
           format: int64
-          description: Price in euro cents.
-          example: 15000
+          deprecated: true
+          description: Legacy price in cents.
+          example: 14999
         photo_url:
           type: string
           example: https://example.com/bike.jpg
