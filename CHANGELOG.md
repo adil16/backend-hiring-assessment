@@ -8,6 +8,16 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 | Type | Description |
 |---|---|
+| Fixed | Made bulk ad imports atomic using a single PostgreSQL transaction to prevent partial imports. |
+| Fixed | Prevented duplicate ads when retrying bulk imports with the same idempotency key. |
+| Added | Added optional `Idempotency-Key` header to `POST /ads/import`, scoped to the authenticated user. |
+| Added | Added persistent import tracking with request hashes and generated ad IDs. |
+| Added | Added `409 Conflict` response when an idempotency key is reused with a different payload. |
+| Added | Added database migration and rollback script for the `import_requests` table. |
+| Added | Added PostgreSQL component tests for idempotency, rollback, and concurrent requests. |
+| Changed | Introduced a dedicated transactional `ImportAds` use case. |
+| Changed | Updated HTTP handlers, unit tests, OpenAPI specification, and README for bulk import idempotency. |
+| Changed | Added field username to get ad by ID response. |
 | Changed | Added field username to get ad by ID response. |
 | Added | Added delete ad by ID feature. |
 | Fixed | Fixed GetAdByID usecase. |

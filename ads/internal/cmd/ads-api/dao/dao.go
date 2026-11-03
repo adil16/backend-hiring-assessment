@@ -28,6 +28,15 @@ type DAO interface {
 // Tx is a Store scoped to an opened transaction.
 type Tx interface {
 	Store
+
+	// ReserveImport reserves an idempotency key.
+	// It returns nil if the key was successfully reserved,
+	// or the existing import result if the key was already used.
+	ReserveImport(ctx context.Context, req ReserveImportRequest) (*ImportResult, error)
+
+	// CompleteImport stores the IDs created by the import.
+	CompleteImport(ctx context.Context, userID domain.UserID, key string, ids []domain.AdID) error
+
 	// Commit applies every change made through the transaction.
 	Commit() error
 	// Rollback discards every change made through the transaction. Calling it on an already committed transaction does nothing, so `defer func() { _ = tx.Rollback() }()` is a safe guard.
@@ -48,6 +57,19 @@ type CreateAdRequest struct {
 	PriceCents int64
 	PhotoURL   string
 	OwnerID    domain.UserID
+}
+
+// ReserveImportRequest identifies an import operation.
+type ReserveImportRequest struct {
+	UserID         domain.UserID
+	IdempotencyKey string
+	RequestHash    string
+}
+
+// ImportResult describes an already recorded import.
+type ImportResult struct {
+	RequestHash string
+	AdIDs       []domain.AdID
 }
 
 const (

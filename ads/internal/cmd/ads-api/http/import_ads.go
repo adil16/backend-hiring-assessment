@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/domain"
@@ -25,7 +26,15 @@ func handlerImportAds(importAds usecase.ImportAdsFunc) http.HandlerFunc {
 			return
 		}
 
-		if len(body.Ads) == 0 {
+		idempotencyKey := r.Header.Get("Idempotency-Key")
+		if len(idempotencyKey) > 255 {
+			rw.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		// An empty import without an idempotency key
+		// does not need to reach the use case.
+		if len(body.Ads) == 0 && idempotencyKey == "" {
 			rw.Header().Set("Content-Type", "application/json")
 			rw.WriteHeader(http.StatusCreated)
 			_ = json.NewEncoder(rw).Encode(importAdsResponse{
@@ -53,9 +62,16 @@ func handlerImportAds(importAds usecase.ImportAdsFunc) http.HandlerFunc {
 		}
 
 		adIDs, err := importAds(r.Context(), usecase.ImportAdsRequest{
-			Ads: ads,
+			Ads:            ads,
+			OwnerID:        ownerID,
+			IdempotencyKey: idempotencyKey,
 		})
 		if err != nil {
+			if errors.Is(err, usecase.ErrIdempotencyConflict) {
+				rw.WriteHeader(http.StatusConflict)
+				return
+			}
+
 			rw.WriteHeader(http.StatusInternalServerError)
 			return
 		}

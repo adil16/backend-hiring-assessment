@@ -59,6 +59,30 @@ func (m *Mock) DeleteAdByID(ctx context.Context, id domain.AdID) error {
 	return args.Error(0)
 }
 
+// ReserveImport returns an existing import result, if any, and the configured error.
+func (m *Mock) ReserveImport(
+	ctx context.Context,
+	req adsdao.ReserveImportRequest,
+) (*adsdao.ImportResult, error) {
+	args := m.Called(ctx, req)
+
+	result, _ := args.Get(0).(*adsdao.ImportResult)
+
+	return result, args.Error(1)
+}
+
+// CompleteImport returns the configured error.
+func (m *Mock) CompleteImport(
+	ctx context.Context,
+	userID domain.UserID,
+	key string,
+	ids []domain.AdID,
+) error {
+	args := m.Called(ctx, userID, key, ids)
+
+	return args.Error(0)
+}
+
 // Begin returns the mock itself as the transaction, so expectations stay set on a single object, and the error set on the mock.
 func (m *Mock) Begin(ctx context.Context) (adsdao.Tx, error) {
 	args := m.Called(ctx)

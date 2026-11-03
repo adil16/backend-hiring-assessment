@@ -92,6 +92,96 @@ paths:
           description: Missing Authorization header.
         "500":
           description: Unexpected server error.
+      
+  /ads/import:
+    post:
+      summary: Bulk import ads
+      description: |
+        Atomically creates multiple ads owned by the authenticated user.
+
+        All ads are created within a single database transaction.
+        If any creation fails, the entire import is rolled back.
+
+        An optional `Idempotency-Key` header prevents duplicate ads
+        when a client retries the same import.
+
+        - A new key creates the ads and stores the generated IDs.
+        - Reusing the same key with the same import returns the original IDs.
+        - Reusing the same key with a different import returns 409 Conflict.
+        - Without a key, the import remains atomic but is not idempotent.
+
+        Idempotency keys are scoped to the authenticated user.
+        Equivalent prices expressed using `price` or `price_cents`
+        are treated as the same import.
+
+      operationId: importAds
+      tags: [ads]
+      security:
+        - userID: []
+
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: |
+            Unique identifier of an import operation.
+
+            Clients should generate a new UUID for each import and
+            reuse the same key when retrying that operation.
+
+            The key is scoped to the authenticated user.
+            Maximum length: 255 characters.
+          schema:
+            type: string
+            maxLength: 255
+          example: "550e8400-e29b-41d4-a716-446655440000"
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportAdsBody"
+            example:
+              ads:
+                - title: Mountain bike
+                  price: 120.00
+                  photo_url: https://example.com/photos/bike.jpg
+                - title: Bike helmet
+                  price: 35.50
+                  photo_url: https://example.com/photos/helmet.jpg
+
+      responses:
+        "201":
+          description: |
+            Import completed successfully.
+
+            Returns the generated ad IDs in the original order.
+            When an identical request is retried with the same
+            idempotency key, the original IDs are returned
+            without creating new ads.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportAdsResponse"
+              example:
+                ids: [101, 102]
+
+        "400":
+          description: |
+            Invalid request body, price, or idempotency key.
+
+        "401":
+          description: Missing Authorization header.
+
+        "409":
+          description: |
+            The idempotency key has already been used by this
+            user with a different import payload.
+
+        "500":
+          description: Unexpected server or database error.
+
 
   /ads/{adID}:
     get:
@@ -241,3 +331,28 @@ components:
           format: int64
           description: Generated identifier of the new ad.
           example: 42
+
+    ImportAdsBody:
+      type: object
+      properties:
+        ads:
+          type: array
+          description: |
+            Ads to import. An empty list is accepted and
+            returns an empty list of generated IDs.
+          items:
+            $ref: "#/components/schemas/CreateAdBody"
+
+    ImportAdsResponse:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          description: |
+            Identifiers of the imported ads, in the same
+            order as the request.
+          items:
+            type: integer
+            format: int64
+          example: [101, 102]

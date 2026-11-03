@@ -123,6 +123,84 @@ func TestMock_DeleteAdByID(t *testing.T) {
 	})
 }
 
+func TestMock_ReserveImport(t *testing.T) {
+	req := adsdao.ReserveImportRequest{
+		UserID:         "user-1",
+		IdempotencyKey: "import-123",
+		RequestHash:    "hash-123",
+	}
+
+	t.Run("returns nil when key is reserved", func(t *testing.T) {
+		m := mock.New(t)
+
+		m.On("ReserveImport", ctx, req).
+			Return((*adsdao.ImportResult)(nil), nil)
+
+		got, err := m.ReserveImport(ctx, req)
+
+		require.NoError(t, err)
+		assert.Nil(t, got)
+	})
+
+	t.Run("returns existing import", func(t *testing.T) {
+		m := mock.New(t)
+
+		want := &adsdao.ImportResult{
+			RequestHash: "hash-123",
+			AdIDs:       []domain.AdID{10, 11, 12},
+		}
+
+		m.On("ReserveImport", ctx, req).Return(want, nil)
+
+		got, err := m.ReserveImport(ctx, req)
+
+		require.NoError(t, err)
+		assert.Equal(t, want, got)
+	})
+
+	t.Run("returns configured error", func(t *testing.T) {
+		m := mock.New(t)
+		boom := errors.New("db down")
+
+		m.On("ReserveImport", ctx, req).
+			Return((*adsdao.ImportResult)(nil), boom)
+
+		got, err := m.ReserveImport(ctx, req)
+
+		assert.ErrorIs(t, err, boom)
+		assert.Nil(t, got)
+	})
+}
+
+func TestMock_CompleteImport(t *testing.T) {
+	userID := domain.UserID("user-1")
+	key := "import-123"
+	ids := []domain.AdID{10, 11, 12}
+
+	t.Run("returns nil on success", func(t *testing.T) {
+		m := mock.New(t)
+
+		m.On("CompleteImport", ctx, userID, key, ids).
+			Return(nil)
+
+		err := m.CompleteImport(ctx, userID, key, ids)
+
+		require.NoError(t, err)
+	})
+
+	t.Run("returns configured error", func(t *testing.T) {
+		m := mock.New(t)
+		boom := errors.New("db down")
+
+		m.On("CompleteImport", ctx, userID, key, ids).
+			Return(boom)
+
+		err := m.CompleteImport(ctx, userID, key, ids)
+
+		assert.ErrorIs(t, err, boom)
+	})
+}
+
 func TestMock_Begin(t *testing.T) {
 	t.Run("returns the mock itself as transaction", func(t *testing.T) {
 		m := mock.New(t)

@@ -1,11 +1,13 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -19,6 +21,35 @@ func newImportAdsServer(fn usecase.ImportAdsFunc) *httptest.Server {
 	mux := http.NewServeMux()
 	mux.Handle("POST /ads/import", middleware.RequireAuth(handlerImportAds(fn)))
 	return httptest.NewServer(mux)
+}
+
+func postImportAdsWithKey(
+	t *testing.T,
+	url string,
+	body importAdsBody,
+	userID string,
+	key string,
+) *http.Response {
+	t.Helper()
+
+	payload, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	req, err := http.NewRequest(
+		http.MethodPost,
+		url,
+		bytes.NewReader(payload),
+	)
+	require.NoError(t, err)
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", userID)
+	req.Header.Set("Idempotency-Key", key)
+
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+
+	return resp
 }
 
 func TestHandlerImportAds(t *testing.T) {
@@ -119,6 +150,7 @@ func TestHandlerImportAds(t *testing.T) {
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		require.Len(t, received.Ads, 2)
 
+		assert.Equal(t, domain.UserID("user-42"), received.OwnerID)
 		assert.Equal(t, domain.UserID("user-42"), received.Ads[0].OwnerID)
 		assert.Equal(t, domain.UserID("user-42"), received.Ads[1].OwnerID)
 	})
@@ -126,14 +158,18 @@ func TestHandlerImportAds(t *testing.T) {
 	t.Run("returns 201 with empty IDs when body has no ads", func(t *testing.T) {
 		calls := 0
 
-		srv := newImportAdsServer(func(_ context.Context, req usecase.ImportAdsRequest) ([]domain.AdID, error) {
+		srv := newImportAdsServer(func(_ context.Context, _ usecase.ImportAdsRequest) ([]domain.AdID, error) {
 			calls++
-			assert.Empty(t, req.Ads)
-			return []domain.AdID{}, nil
+			return nil, nil
 		})
 		defer srv.Close()
 
-		resp := postJSON(t, srv.URL+"/ads/import", importAdsBody{Ads: []createAdBody{}}, "user-1")
+		resp := postJSON(
+			t,
+			srv.URL+"/ads/import",
+			importAdsBody{Ads: []createAdBody{}},
+			"user-1",
+		)
 		defer resp.Body.Close()
 
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -141,7 +177,7 @@ func TestHandlerImportAds(t *testing.T) {
 
 		var got importAdsResponse
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
-		assert.Empty(t, got.IDs)
+		assert.Equal(t, []int64{}, got.IDs)
 	})
 
 	t.Run("returns 401 when Authorization header is missing", func(t *testing.T) {
@@ -261,5 +297,151 @@ func TestHandlerImportAds(t *testing.T) {
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 		assert.Equal(t, 1, calls)
+	})
+
+	t.Run("passes idempotency key to usecase", func(t *testing.T) {
+		calls := 0
+
+		srv := newImportAdsServer(func(
+			_ context.Context,
+			req usecase.ImportAdsRequest,
+		) ([]domain.AdID, error) {
+			calls++
+
+			assert.Equal(t, "import-123", req.IdempotencyKey)
+			assert.Equal(t, domain.UserID("user-42"), req.OwnerID)
+			assert.Len(t, req.Ads, 1)
+
+			if len(req.Ads) == 1 {
+				assert.Equal(t, domain.UserID("user-42"), req.Ads[0].OwnerID)
+			}
+
+			return []domain.AdID{10}, nil
+		})
+		defer srv.Close()
+
+		body := importAdsBody{Ads: []createAdBody{
+			{
+				Title:      "bike",
+				PriceCents: new(int64(5000)),
+				PhotoURL:   "https://example.com/bike.jpg",
+			},
+		}}
+
+		resp := postImportAdsWithKey(
+			t,
+			srv.URL+"/ads/import",
+			body,
+			"user-42",
+			"import-123",
+		)
+		defer resp.Body.Close()
+
+		require.Equal(t, http.StatusCreated, resp.StatusCode)
+		assert.Equal(t, 1, calls)
+
+		var got importAdsResponse
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+		assert.Equal(t, []int64{10}, got.IDs)
+	})
+
+	t.Run("returns 409 on idempotency conflict", func(t *testing.T) {
+		calls := 0
+
+		srv := newImportAdsServer(func(
+			_ context.Context,
+			_ usecase.ImportAdsRequest,
+		) ([]domain.AdID, error) {
+			calls++
+			return nil, usecase.ErrIdempotencyConflict
+		})
+		defer srv.Close()
+
+		body := importAdsBody{Ads: []createAdBody{
+			{
+				Title:      "bike",
+				PriceCents: new(int64(5000)),
+				PhotoURL:   "https://example.com/bike.jpg",
+			},
+		}}
+
+		resp := postImportAdsWithKey(
+			t,
+			srv.URL+"/ads/import",
+			body,
+			"user-1",
+			"import-123",
+		)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusConflict, resp.StatusCode)
+		assert.Equal(t, 1, calls)
+	})
+
+	t.Run("records empty import when idempotency key is provided", func(t *testing.T) {
+		calls := 0
+
+		srv := newImportAdsServer(func(
+			_ context.Context,
+			req usecase.ImportAdsRequest,
+		) ([]domain.AdID, error) {
+			calls++
+
+			assert.Equal(t, "empty-import-123", req.IdempotencyKey)
+			assert.Equal(t, domain.UserID("user-1"), req.OwnerID)
+			assert.Empty(t, req.Ads)
+
+			return []domain.AdID{}, nil
+		})
+		defer srv.Close()
+
+		resp := postImportAdsWithKey(
+			t,
+			srv.URL+"/ads/import",
+			importAdsBody{Ads: []createAdBody{}},
+			"user-1",
+			"empty-import-123",
+		)
+		defer resp.Body.Close()
+
+		require.Equal(t, http.StatusCreated, resp.StatusCode)
+		assert.Equal(t, 1, calls)
+
+		var got importAdsResponse
+		require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
+		assert.Equal(t, []int64{}, got.IDs)
+	})
+
+	t.Run("returns 400 when idempotency key exceeds 255 characters", func(t *testing.T) {
+		calls := 0
+
+		srv := newImportAdsServer(func(
+			_ context.Context,
+			_ usecase.ImportAdsRequest,
+		) ([]domain.AdID, error) {
+			calls++
+			return nil, nil
+		})
+		defer srv.Close()
+
+		body := importAdsBody{Ads: []createAdBody{
+			{
+				Title:      "bike",
+				PriceCents: new(int64(5000)),
+				PhotoURL:   "https://example.com/bike.jpg",
+			},
+		}}
+
+		resp := postImportAdsWithKey(
+			t,
+			srv.URL+"/ads/import",
+			body,
+			"user-1",
+			strings.Repeat("a", 256),
+		)
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.Zero(t, calls)
 	})
 }

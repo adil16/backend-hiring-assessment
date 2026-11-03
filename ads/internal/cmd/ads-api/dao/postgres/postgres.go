@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -194,6 +195,117 @@ func (d *DAO) DeleteAdByID(ctx context.Context, id domain.AdID) error {
 
 	if rowsAffected == 0 {
 		return adsdao.ErrNotFound
+	}
+
+	return nil
+}
+
+// ReserveImport reserves an idempotency key or returns an existing import.
+func (d *DAO) ReserveImport(
+	ctx context.Context,
+	req adsdao.ReserveImportRequest,
+) (*adsdao.ImportResult, error) {
+	if d.tx == nil {
+		return nil, errors.New("unable to reserve import outside a transaction")
+	}
+
+	const insertQuery = `
+		INSERT INTO import_requests (user_id, idempotency_key, request_hash)
+		VALUES ($1::uuid, $2, $3)
+		ON CONFLICT (user_id, idempotency_key) DO NOTHING
+		RETURNING 1`
+
+	var inserted int
+	err := d.tx.QueryRowContext(
+		ctx,
+		insertQuery,
+		string(req.UserID),
+		req.IdempotencyKey,
+		req.RequestHash,
+	).Scan(&inserted)
+
+	if err == nil {
+		// New key: the import can proceed.
+		return nil, nil
+	}
+
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, fmt.Errorf("unable to reserve import: %w", err)
+	}
+
+	// The key already exists. Retrieve the recorded import.
+	const selectQuery = `
+		SELECT request_hash, array_to_json(ad_ids)::text
+		FROM import_requests
+		WHERE user_id = $1::uuid
+		  AND idempotency_key = $2`
+
+	var result adsdao.ImportResult
+	var idsJSON string
+
+	err = d.tx.QueryRowContext(
+		ctx,
+		selectQuery,
+		string(req.UserID),
+		req.IdempotencyKey,
+	).Scan(&result.RequestHash, &idsJSON)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get existing import: %w", err)
+	}
+
+	var ids []int64
+	if err := json.Unmarshal([]byte(idsJSON), &ids); err != nil {
+		return nil, fmt.Errorf("unable to decode existing import IDs: %w", err)
+	}
+
+	result.AdIDs = make([]domain.AdID, len(ids))
+	for i, id := range ids {
+		result.AdIDs[i] = domain.AdID(id)
+	}
+
+	return &result, nil
+}
+
+// CompleteImport records the IDs created by an import.
+func (d *DAO) CompleteImport(
+	ctx context.Context,
+	userID domain.UserID,
+	key string,
+	ids []domain.AdID,
+) error {
+	if d.tx == nil {
+		return errors.New("unable to complete import outside a transaction")
+	}
+
+	adIDs := make([]int64, len(ids))
+	for i, id := range ids {
+		adIDs[i] = int64(id)
+	}
+
+	const query = `
+		UPDATE import_requests
+		SET ad_ids = $3::bigint[]
+		WHERE user_id = $1::uuid
+		  AND idempotency_key = $2`
+
+	result, err := d.tx.ExecContext(
+		ctx,
+		query,
+		string(userID),
+		key,
+		adIDs,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to complete import: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("unable to get updated import rows: %w", err)
+	}
+
+	if rowsAffected != 1 {
+		return fmt.Errorf("unable to complete import: expected one updated row, got %d", rowsAffected)
 	}
 
 	return nil
