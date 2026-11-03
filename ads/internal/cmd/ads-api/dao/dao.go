@@ -29,17 +29,22 @@ type DAO interface {
 type Tx interface {
 	Store
 
-	// ReserveImport reserves an idempotency key.
-	// It returns nil if the key was successfully reserved,
-	// or the existing import result if the key was already used.
+	// ReserveImport reserves an idempotency key or returns an existing import.
 	ReserveImport(ctx context.Context, req ReserveImportRequest) (*ImportResult, error)
 
-	// CompleteImport stores the IDs created by the import.
+	// CompleteImport records the IDs created by an import.
 	CompleteImport(ctx context.Context, userID domain.UserID, key string, ids []domain.AdID) error
 
-	// Commit applies every change made through the transaction.
+	// LockUserPublications serializes publication attempts for a user.
+	LockUserPublications(ctx context.Context, userID domain.UserID) error
+
+	// CountRecentPublications counts publications made in the last 24 hours.
+	CountRecentPublications(ctx context.Context, userID domain.UserID) (int, error)
+
+	// RecordPublication records a successful single-ad publication.
+	RecordPublication(ctx context.Context, userID domain.UserID) error
+
 	Commit() error
-	// Rollback discards every change made through the transaction. Calling it on an already committed transaction does nothing, so `defer func() { _ = tx.Rollback() }()` is a safe guard.
 	Rollback() error
 }
 

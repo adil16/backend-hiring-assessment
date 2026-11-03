@@ -119,6 +119,31 @@ The idempotency key and the import result are stored in the same transaction as 
 
 **Note:** The idempotency mechanism compares normalized ad data. For example, `price: 120.00` and `price_cents: 12000` are treated as equivalent for retry detection.
 
+## Publication quota
+
+Users can publish at most **5 ads within a rolling 24-hour window** through `POST /ads`.
+
+- The first 5 publications are accepted (`201 Created`).
+- Additional publications within the same window are rejected with `429 Too Many Requests`.
+- Deleting an ad does not restore the publication quota.
+- Bulk imports through `POST /ads/import` are exempt from the quota and do not count towards it.
+
+### Implementation
+
+Publication events are stored in a dedicated PostgreSQL `ad_publications` table, independently of the ads themselves.
+
+Each single-ad creation runs in a database transaction:
+
+1. Acquire a transaction-scoped advisory lock for the authenticated user.
+2. Count publications made within the last 24 hours.
+3. Reject the request if the quota is reached.
+4. Otherwise, create the ad and record its publication.
+5. Commit both operations atomically.
+
+The per-user advisory lock prevents concurrent requests from exceeding the quota. If the transaction fails, neither the ad nor its publication event is persisted.
+
+This approach also ensures that deleting an ad does not reset the quota and that bulk imports remain excluded.
+
 ## Tests
 
 To launch all the tests:
@@ -129,7 +154,7 @@ go test ./...
 
 ### Component tests (PostgreSQL)
 
-The PostgreSQL DAO has component tests that run against a real database to verify transaction handling, idempotency key reservation, and concurrent requests.
+The PostgreSQL DAO has component tests that run against a real database to verify transaction handling, idempotency key reservation, publication history, and concurrent requests.
 
 These tests require Docker and a dedicated `ads_test` database.
 
@@ -150,7 +175,9 @@ docker compose exec -T ads-database \
 
 #### 3. Apply the required migrations
 
-The test database requires the `ads` and `import_requests` tables. The seed data migration (`002_seed_data.sql`) is not needed.
+The test database requires the `ads`, `import_requests`, and `ad_publications` tables.
+
+The seed data migration (`002_seed_data.sql`) is not needed.
 
 The following commands are compatible with Git Bash on Windows:
 
@@ -162,9 +189,15 @@ MSYS_NO_PATHCONV=1 docker compose exec -T ads-database \
 MSYS_NO_PATHCONV=1 docker compose exec -T ads-database \
   psql -v ON_ERROR_STOP=1 -U ads -d ads_test \
   -f /docker-entrypoint-initdb.d/003_create_import_requests.sql
+
+MSYS_NO_PATHCONV=1 docker compose exec -T ads-database \
+  psql -v ON_ERROR_STOP=1 -U ads -d ads_test \
+  -f /docker-entrypoint-initdb.d/004_create_ad_publications.sql
 ```
 
 `MSYS_NO_PATHCONV=1` prevents Git Bash from converting container paths into Windows paths.
+
+These migrations only need to be applied once to an existing test database.
 
 #### 4. Run the component tests
 
@@ -172,7 +205,24 @@ From the repository root:
 
 ```shell
 ADS_TEST_DATABASE_URL="postgres://ads:ads@localhost:5432/ads_test?sslmode=disable" \
-go test ./ads/internal/cmd/ads-api/dao/postgres -run TestImportRequests -v
+go test ./ads/internal/cmd/ads-api/dao/postgres \
+  -run 'TestImportRequests|TestAdPublications' -v
+```
+
+The component tests cover:
+
+- Atomic import transactions and idempotency key reservation.
+- Concurrent requests using the same idempotency key.
+- Publication counting within a rolling 24-hour window.
+- Publication persistence after commit and cancellation after rollback.
+- Concurrent publication attempts for the same user, ensuring that the quota cannot be exceeded.
+
+To verify that the concurrent publication test remains stable, run it multiple times:
+
+```shell
+ADS_TEST_DATABASE_URL="postgres://ads:ads@localhost:5432/ads_test?sslmode=disable" \
+go test ./ads/internal/cmd/ads-api/dao/postgres \
+  -run 'TestAdPublications/concurrent_requests' -count=20
 ```
 
 To run all tests, including the PostgreSQL component tests:
@@ -184,4 +234,4 @@ go test ./...
 
 If `ADS_TEST_DATABASE_URL` is not set, the PostgreSQL component tests are skipped, so the regular test suite can still run without a database.
 
-**Note:** The database creation and migration steps only need to be performed once, unless the test database is recreated.
+**Note:** Database creation and migration steps only need to be performed once, unless the test database is recreated. If the database already exists, apply only the missing migrations.

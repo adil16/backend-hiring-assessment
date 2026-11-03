@@ -8,6 +8,10 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 | Type | Description |
 |---|---|
+| Added | Enforced a maximum of 5 ad publications per rolling 24-hour window through `POST /ads`. |
+| Added | Added `429 Too Many Requests` response when the publication quota is exceeded. |
+| Added | Introduced an `ad_publications` table with a database migration, rollback script, and composite index for tracking publication history. |
+| Changed | Updated use case, DAO, HTTP tests, PostgreSQL component tests, OpenAPI specification, and README to support the publication quota. |
 | Fixed | Made bulk ad imports atomic using a single PostgreSQL transaction to prevent partial imports. |
 | Fixed | Prevented duplicate ads when retrying bulk imports with the same idempotency key. |
 | Added | Added optional `Idempotency-Key` header to `POST /ads/import`, scoped to the authenticated user. |
@@ -17,7 +21,6 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 | Added | Added PostgreSQL component tests for idempotency, rollback, and concurrent requests. |
 | Changed | Introduced a dedicated transactional `ImportAds` use case. |
 | Changed | Updated HTTP handlers, unit tests, OpenAPI specification, and README for bulk import idempotency. |
-| Changed | Added field username to get ad by ID response. |
 | Changed | Added field username to get ad by ID response. |
 | Added | Added delete ad by ID feature. |
 | Fixed | Fixed GetAdByID usecase. |

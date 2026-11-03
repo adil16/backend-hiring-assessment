@@ -201,6 +201,83 @@ func TestMock_CompleteImport(t *testing.T) {
 	})
 }
 
+func TestMock_LockUserPublications(t *testing.T) {
+	userID := domain.UserID("user-1")
+
+	t.Run("returns nil on success", func(t *testing.T) {
+		m := mock.New(t)
+
+		m.On("LockUserPublications", ctx, userID).Return(nil)
+
+		err := m.LockUserPublications(ctx, userID)
+
+		require.NoError(t, err)
+	})
+
+	t.Run("returns configured error", func(t *testing.T) {
+		m := mock.New(t)
+		boom := errors.New("lock failed")
+
+		m.On("LockUserPublications", ctx, userID).Return(boom)
+
+		err := m.LockUserPublications(ctx, userID)
+
+		assert.ErrorIs(t, err, boom)
+	})
+}
+
+func TestMock_CountRecentPublications(t *testing.T) {
+	userID := domain.UserID("user-1")
+
+	t.Run("returns configured count", func(t *testing.T) {
+		m := mock.New(t)
+
+		m.On("CountRecentPublications", ctx, userID).Return(4, nil)
+
+		got, err := m.CountRecentPublications(ctx, userID)
+
+		require.NoError(t, err)
+		assert.Equal(t, 4, got)
+	})
+
+	t.Run("returns configured error", func(t *testing.T) {
+		m := mock.New(t)
+		boom := errors.New("db down")
+
+		m.On("CountRecentPublications", ctx, userID).Return(0, boom)
+
+		got, err := m.CountRecentPublications(ctx, userID)
+
+		assert.ErrorIs(t, err, boom)
+		assert.Zero(t, got)
+	})
+}
+
+func TestMock_RecordPublication(t *testing.T) {
+	userID := domain.UserID("user-1")
+
+	t.Run("returns nil on success", func(t *testing.T) {
+		m := mock.New(t)
+
+		m.On("RecordPublication", ctx, userID).Return(nil)
+
+		err := m.RecordPublication(ctx, userID)
+
+		require.NoError(t, err)
+	})
+
+	t.Run("returns configured error", func(t *testing.T) {
+		m := mock.New(t)
+		boom := errors.New("db down")
+
+		m.On("RecordPublication", ctx, userID).Return(boom)
+
+		err := m.RecordPublication(ctx, userID)
+
+		assert.ErrorIs(t, err, boom)
+	})
+}
+
 func TestMock_Begin(t *testing.T) {
 	t.Run("returns the mock itself as transaction", func(t *testing.T) {
 		m := mock.New(t)

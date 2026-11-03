@@ -43,7 +43,12 @@ func handlerCreateAd(createAd usecase.CreateAdFunc) http.HandlerFunc {
 			OwnerID:    middleware.UserIDFromHeader(r),
 		})
 		if err != nil {
-			rw.WriteHeader(http.StatusInternalServerError)
+			if errors.Is(err, usecase.ErrQuotaExceeded) {
+				http.Error(rw, "publication quota exceeded", http.StatusTooManyRequests)
+				return
+			}
+
+			http.Error(rw, "internal server error", http.StatusInternalServerError)
 			return
 		}
 

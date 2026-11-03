@@ -62,9 +62,17 @@ paths:
                 $ref: "#/components/schemas/ListAdsResponse"
         "400":
           description: Invalid query parameter (e.g. non-numeric price).
-
+    
     post:
       summary: Create an ad
+      description: |
+        Creates an ad for the authenticated user.
+
+        A user can publish at most 5 ads within a rolling 24-hour window.
+        Deleting an ad does not restore the publication quota.
+
+        Ads created through the bulk import endpoint do not count
+        towards this quota.
       operationId: createAd
       tags: [ads]
       security:
@@ -90,9 +98,11 @@ paths:
           description: Malformed or unknown request body field.
         "401":
           description: Missing Authorization header.
+        "429":
+          description: Publication quota exceeded (5 ads within a rolling 24-hour window).
         "500":
           description: Unexpected server error.
-      
+
   /ads/import:
     post:
       summary: Bulk import ads
@@ -113,6 +123,10 @@ paths:
         Idempotency keys are scoped to the authenticated user.
         Equivalent prices expressed using `price` or `price_cents`
         are treated as the same import.
+
+        The publication quota of 5 ads per rolling 24-hour window
+        does not apply to bulk imports. Imported ads do not count
+        towards this quota.
 
       operationId: importAds
       tags: [ads]

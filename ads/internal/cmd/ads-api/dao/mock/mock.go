@@ -83,6 +83,25 @@ func (m *Mock) CompleteImport(
 	return args.Error(0)
 }
 
+// LockUserPublications returns the configured error.
+func (m *Mock) LockUserPublications(ctx context.Context, userID domain.UserID) error {
+	return m.Called(ctx, userID).Error(0)
+}
+
+// CountRecentPublications returns the configured count and error.
+func (m *Mock) CountRecentPublications(ctx context.Context, userID domain.UserID) (int, error) {
+	args := m.Called(ctx, userID)
+
+	count, _ := args.Get(0).(int)
+
+	return count, args.Error(1)
+}
+
+// RecordPublication returns the configured error.
+func (m *Mock) RecordPublication(ctx context.Context, userID domain.UserID) error {
+	return m.Called(ctx, userID).Error(0)
+}
+
 // Begin returns the mock itself as the transaction, so expectations stay set on a single object, and the error set on the mock.
 func (m *Mock) Begin(ctx context.Context) (adsdao.Tx, error) {
 	args := m.Called(ctx)

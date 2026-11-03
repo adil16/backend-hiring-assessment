@@ -311,6 +311,62 @@ func (d *DAO) CompleteImport(
 	return nil
 }
 
+// LockUserPublications serializes publication attempts for a user.
+func (d *DAO) LockUserPublications(ctx context.Context, userID domain.UserID) error {
+	if d.tx == nil {
+		return errors.New("unable to lock publications outside a transaction")
+	}
+
+	const query = `
+		SELECT pg_advisory_xact_lock(
+			hashtextextended('ads:publication-quota:' || $1::text, 0)
+		)`
+
+	var ignored any
+	if err := d.tx.QueryRowContext(ctx, query, string(userID)).Scan(&ignored); err != nil {
+		return fmt.Errorf("unable to lock user publications: %w", err)
+	}
+
+	return nil
+}
+
+// CountRecentPublications counts publications made in the last 24 hours.
+func (d *DAO) CountRecentPublications(ctx context.Context, userID domain.UserID) (int, error) {
+	if d.tx == nil {
+		return 0, errors.New("unable to count publications outside a transaction")
+	}
+
+	const query = `
+		SELECT COUNT(*)
+		FROM ad_publications
+		WHERE user_id = $1::uuid
+		  AND created_at > statement_timestamp() - INTERVAL '24 hours'`
+
+	var count int
+	if err := d.tx.QueryRowContext(ctx, query, string(userID)).Scan(&count); err != nil {
+		return 0, fmt.Errorf("unable to count recent publications: %w", err)
+	}
+
+	return count, nil
+}
+
+// RecordPublication records a successful single-ad publication.
+func (d *DAO) RecordPublication(ctx context.Context, userID domain.UserID) error {
+	if d.tx == nil {
+		return errors.New("unable to record publication outside a transaction")
+	}
+
+	const query = `
+		INSERT INTO ad_publications (user_id)
+		VALUES ($1::uuid)`
+
+	if _, err := d.tx.ExecContext(ctx, query, string(userID)); err != nil {
+		return fmt.Errorf("unable to record publication: %w", err)
+	}
+
+	return nil
+}
+
 func scanAd(row *sql.Row) (domain.Ad, error) {
 	var ad domain.Ad
 	if err := row.Scan(&ad.ID, &ad.Title, &ad.Price, &ad.PhotoURL, &ad.UserID, &ad.CreatedAt); err != nil {
