@@ -23,23 +23,6 @@ func newCreateAdServer(fn usecase.CreateAdFunc) *httptest.Server {
 	return httptest.NewServer(mux)
 }
 
-func postJSON(t *testing.T, url string, body any, authHeader string) *http.Response {
-	t.Helper()
-	b, err := json.Marshal(body)
-	require.NoError(t, err)
-
-	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(b))
-	require.NoError(t, err)
-	req.Header.Set("Content-Type", "application/json")
-	if authHeader != "" {
-		req.Header.Set("Authorization", authHeader)
-	}
-
-	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
-	return resp
-}
-
 func TestHandlerCreateAd(t *testing.T) {
 	validBody := createAdBody{
 		Title:      "mountain bike",
@@ -51,10 +34,9 @@ func TestHandlerCreateAd(t *testing.T) {
 		srv := newCreateAdServer(func(_ context.Context, req usecase.CreateAdRequest) (domain.AdID, error) {
 			return domain.AdID(7), nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp := postJSON(t, srv.URL+"/ads", validBody, "user-1")
-		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
@@ -70,10 +52,9 @@ func TestHandlerCreateAd(t *testing.T) {
 			received = req
 			return domain.AdID(1), nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp := postJSON(t, srv.URL+"/ads", validBody, "user-42")
-		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.Equal(t, domain.UserID("user-42"), received.OwnerID)
@@ -87,10 +68,9 @@ func TestHandlerCreateAd(t *testing.T) {
 			t.Fatal("usecase should not be called")
 			return 0, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp := postJSON(t, srv.URL+"/ads", validBody, "")
-		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
@@ -100,7 +80,7 @@ func TestHandlerCreateAd(t *testing.T) {
 			t.Fatal("usecase should not be called")
 			return 0, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		req, err := http.NewRequest(http.MethodPost, srv.URL+"/ads", bytes.NewBufferString("not json"))
 		require.NoError(t, err)
@@ -108,8 +88,7 @@ func TestHandlerCreateAd(t *testing.T) {
 		req.Header.Set("Authorization", "user-1")
 
 		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
@@ -118,10 +97,9 @@ func TestHandlerCreateAd(t *testing.T) {
 		srv := newCreateAdServer(func(_ context.Context, _ usecase.CreateAdRequest) (domain.AdID, error) {
 			return 0, fmt.Errorf("unable to create ad: %w", usecase.ErrQuotaExceeded)
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp := postJSON(t, srv.URL+"/ads", validBody, "user-1")
-		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 	})
@@ -130,10 +108,9 @@ func TestHandlerCreateAd(t *testing.T) {
 		srv := newCreateAdServer(func(_ context.Context, _ usecase.CreateAdRequest) (domain.AdID, error) {
 			return 0, errors.New("db down")
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp := postJSON(t, srv.URL+"/ads", validBody, "user-1")
-		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	})
@@ -247,10 +224,9 @@ func TestHandlerCreateAd_Price(t *testing.T) {
 				assert.Equal(t, tt.wantPriceCents, req.PriceCents)
 				return domain.AdID(7), nil
 			})
-			defer srv.Close()
+			t.Cleanup(srv.Close)
 
 			resp := postJSON(t, srv.URL+"/ads", tt.body, "user-1")
-			defer resp.Body.Close()
 
 			assert.Equal(t, tt.wantStatus, resp.StatusCode)
 			assert.Equal(t, tt.wantCalled, called)

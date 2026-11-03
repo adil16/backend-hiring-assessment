@@ -32,11 +32,10 @@ func TestHandlerListAds(t *testing.T) {
 		srv := newListAdsServer(func(_ context.Context, _ usecase.ListAdsRequest) ([]domain.Ad, error) {
 			return ads, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp, err := http.Get(srv.URL + "/ads")
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
@@ -68,11 +67,10 @@ func TestHandlerListAds(t *testing.T) {
 		srv := newListAdsServer(func(_ context.Context, _ usecase.ListAdsRequest) ([]domain.Ad, error) {
 			return nil, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp, err := http.Get(srv.URL + "/ads")
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -87,11 +85,10 @@ func TestHandlerListAds(t *testing.T) {
 			received = req
 			return nil, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp, err := http.Get(srv.URL + "/ads?title=bike&user_id=user-3&min_price_cents=1000&max_price_cents=50000")
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "bike", received.Title)
@@ -108,11 +105,10 @@ func TestHandlerListAds(t *testing.T) {
 		srv := newListAdsServer(func(_ context.Context, _ usecase.ListAdsRequest) ([]domain.Ad, error) {
 			return ads, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp, err := http.Get(srv.URL + "/ads")
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -135,11 +131,10 @@ func TestHandlerListAds(t *testing.T) {
 			t.Fatal("usecase should not be called")
 			return nil, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp, err := http.Get(srv.URL + "/ads?min_price_cents=not-a-number")
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
@@ -149,11 +144,10 @@ func TestHandlerListAds(t *testing.T) {
 			t.Fatal("usecase should not be called")
 			return nil, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp, err := http.Get(srv.URL + "/ads?max_price_cents=abc")
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
@@ -162,11 +156,10 @@ func TestHandlerListAds(t *testing.T) {
 		srv := newListAdsServer(func(_ context.Context, _ usecase.ListAdsRequest) ([]domain.Ad, error) {
 			return nil, errors.New("db down")
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp, err := http.Get(srv.URL + "/ads")
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	})

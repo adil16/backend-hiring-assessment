@@ -47,7 +47,7 @@ func postImportAdsWithKey(
 	req.Header.Set("Idempotency-Key", key)
 
 	resp, err := http.DefaultClient.Do(req)
-	require.NoError(t, err)
+	requireHTTPResponse(t, resp, err)
 
 	return resp
 }
@@ -62,7 +62,7 @@ func TestHandlerImportAds(t *testing.T) {
 			assert.Len(t, req.Ads, 3)
 			return ids, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		body := importAdsBody{Ads: []createAdBody{
 			{Title: "bike", PriceCents: new(int64(5000)), PhotoURL: "https://example.com/bike.jpg"},
@@ -71,7 +71,6 @@ func TestHandlerImportAds(t *testing.T) {
 		}}
 
 		resp := postJSON(t, srv.URL+"/ads/import", body, "user-1")
-		defer resp.Body.Close()
 
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.Equal(t, 1, calls)
@@ -90,7 +89,7 @@ func TestHandlerImportAds(t *testing.T) {
 			received = req
 			return []domain.AdID{1, 2, 3}, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		body := importAdsBody{Ads: []createAdBody{
 			{
@@ -111,7 +110,6 @@ func TestHandlerImportAds(t *testing.T) {
 		}}
 
 		resp := postJSON(t, srv.URL+"/ads/import", body, "user-42")
-		defer resp.Body.Close()
 
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.Equal(t, 1, calls)
@@ -137,7 +135,7 @@ func TestHandlerImportAds(t *testing.T) {
 			received = req
 			return []domain.AdID{1, 2}, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		body := importAdsBody{Ads: []createAdBody{
 			{Title: "bike", PriceCents: new(int64(5000)), PhotoURL: "https://example.com/bike.jpg"},
@@ -145,7 +143,6 @@ func TestHandlerImportAds(t *testing.T) {
 		}}
 
 		resp := postJSON(t, srv.URL+"/ads/import", body, "user-42")
-		defer resp.Body.Close()
 
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		require.Len(t, received.Ads, 2)
@@ -162,7 +159,7 @@ func TestHandlerImportAds(t *testing.T) {
 			calls++
 			return nil, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp := postJSON(
 			t,
@@ -170,7 +167,6 @@ func TestHandlerImportAds(t *testing.T) {
 			importAdsBody{Ads: []createAdBody{}},
 			"user-1",
 		)
-		defer resp.Body.Close()
 
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.Zero(t, calls)
@@ -187,10 +183,9 @@ func TestHandlerImportAds(t *testing.T) {
 			calls++
 			return nil, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp := postJSON(t, srv.URL+"/ads/import", importAdsBody{}, "")
-		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		assert.Zero(t, calls)
@@ -203,15 +198,14 @@ func TestHandlerImportAds(t *testing.T) {
 			calls++
 			return nil, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		req, err := http.NewRequest(http.MethodPost, srv.URL+"/ads/import", nil)
 		require.NoError(t, err)
 		req.Header.Set("Authorization", "user-1")
 
 		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.Zero(t, calls)
@@ -224,7 +218,7 @@ func TestHandlerImportAds(t *testing.T) {
 			calls++
 			return nil, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		body := importAdsBody{Ads: []createAdBody{
 			{
@@ -242,7 +236,6 @@ func TestHandlerImportAds(t *testing.T) {
 		}}
 
 		resp := postJSON(t, srv.URL+"/ads/import", body, "user-1")
-		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.Zero(t, calls)
@@ -255,7 +248,7 @@ func TestHandlerImportAds(t *testing.T) {
 			calls++
 			return nil, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		body := importAdsBody{Ads: []createAdBody{
 			{
@@ -270,7 +263,6 @@ func TestHandlerImportAds(t *testing.T) {
 		}}
 
 		resp := postJSON(t, srv.URL+"/ads/import", body, "user-1")
-		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.Zero(t, calls)
@@ -284,7 +276,7 @@ func TestHandlerImportAds(t *testing.T) {
 			assert.Len(t, req.Ads, 3)
 			return nil, errors.New("db down")
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		body := importAdsBody{Ads: []createAdBody{
 			{Title: "bike", PriceCents: new(int64(5000)), PhotoURL: "https://example.com/bike.jpg"},
@@ -293,7 +285,6 @@ func TestHandlerImportAds(t *testing.T) {
 		}}
 
 		resp := postJSON(t, srv.URL+"/ads/import", body, "user-1")
-		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 		assert.Equal(t, 1, calls)
@@ -318,7 +309,7 @@ func TestHandlerImportAds(t *testing.T) {
 
 			return []domain.AdID{10}, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		body := importAdsBody{Ads: []createAdBody{
 			{
@@ -335,7 +326,6 @@ func TestHandlerImportAds(t *testing.T) {
 			"user-42",
 			"import-123",
 		)
-		defer resp.Body.Close()
 
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.Equal(t, 1, calls)
@@ -355,7 +345,7 @@ func TestHandlerImportAds(t *testing.T) {
 			calls++
 			return nil, usecase.ErrIdempotencyConflict
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		body := importAdsBody{Ads: []createAdBody{
 			{
@@ -372,7 +362,6 @@ func TestHandlerImportAds(t *testing.T) {
 			"user-1",
 			"import-123",
 		)
-		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusConflict, resp.StatusCode)
 		assert.Equal(t, 1, calls)
@@ -393,7 +382,7 @@ func TestHandlerImportAds(t *testing.T) {
 
 			return []domain.AdID{}, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp := postImportAdsWithKey(
 			t,
@@ -402,7 +391,6 @@ func TestHandlerImportAds(t *testing.T) {
 			"user-1",
 			"empty-import-123",
 		)
-		defer resp.Body.Close()
 
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.Equal(t, 1, calls)
@@ -422,7 +410,7 @@ func TestHandlerImportAds(t *testing.T) {
 			calls++
 			return nil, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		body := importAdsBody{Ads: []createAdBody{
 			{
@@ -439,7 +427,6 @@ func TestHandlerImportAds(t *testing.T) {
 			"user-1",
 			strings.Repeat("a", 256),
 		)
-		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.Zero(t, calls)

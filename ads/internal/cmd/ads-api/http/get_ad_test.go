@@ -41,11 +41,10 @@ func TestHandlerGetAd(t *testing.T) {
 		srv := newGetAdServer(func(_ context.Context, id domain.AdID) (domain.AdWithUsername, error) {
 			return ad, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp, err := http.Get(srv.URL + "/ads/42")
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "application/json", resp.Header.Get("Content-Type"))
@@ -67,11 +66,10 @@ func TestHandlerGetAd(t *testing.T) {
 			t.Fatal("usecase should not be called")
 			return domain.AdWithUsername{}, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp, err := http.Get(srv.URL + "/ads/not-a-number")
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
@@ -80,11 +78,10 @@ func TestHandlerGetAd(t *testing.T) {
 		srv := newGetAdServer(func(_ context.Context, _ domain.AdID) (domain.AdWithUsername, error) {
 			return domain.AdWithUsername{}, adsdao.ErrNotFound
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp, err := http.Get(srv.URL + "/ads/99")
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	})
@@ -100,11 +97,10 @@ func TestHandlerGetAd(t *testing.T) {
 		srv := newGetAdServer(func(_ context.Context, _ domain.AdID) (domain.AdWithUsername, error) {
 			return domain.AdWithUsername{Ad: ad}, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp, err := http.Get(srv.URL + "/ads/99")
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -131,11 +127,10 @@ func TestHandlerGetAd(t *testing.T) {
 		srv := newGetAdServer(func(_ context.Context, _ domain.AdID) (domain.AdWithUsername, error) {
 			return ad, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp, err := http.Get(srv.URL + "/ads/42")
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -150,11 +145,10 @@ func TestHandlerGetAd(t *testing.T) {
 		srv := newGetAdServer(func(_ context.Context, _ domain.AdID) (domain.AdWithUsername, error) {
 			return domain.AdWithUsername{}, errors.New("db down")
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp, err := http.Get(srv.URL + "/ads/1")
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	})
@@ -165,11 +159,10 @@ func TestHandlerGetAd(t *testing.T) {
 			receivedID = id
 			return domain.AdWithUsername{Ad: domain.Ad{ID: id}}, nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		resp, err := http.Get(srv.URL + "/ads/7")
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, domain.AdID(7), receivedID)

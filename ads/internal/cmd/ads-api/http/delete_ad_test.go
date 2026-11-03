@@ -30,18 +30,18 @@ func TestHandlerDeleteAd(t *testing.T) {
 			assert.Equal(t, domain.UserID("123"), userID)
 			return nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		req, err := http.NewRequest(
 			http.MethodDelete,
 			srv.URL+"/ads/42",
 			nil,
 		)
+		require.NoError(t, err)
 		req.Header.Set("Authorization", "123")
 
 		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
@@ -50,17 +50,17 @@ func TestHandlerDeleteAd(t *testing.T) {
 		srv := newDeleteAdServer(func(_ context.Context, id domain.AdID, userID domain.UserID) error {
 			return nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		req, err := http.NewRequest(
 			http.MethodDelete,
 			srv.URL+"/ads/42",
 			nil,
 		)
+		require.NoError(t, err)
 
 		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
@@ -70,18 +70,18 @@ func TestHandlerDeleteAd(t *testing.T) {
 			t.Fatal("usecase should not be called")
 			return nil
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		req, err := http.NewRequest(
 			http.MethodDelete,
 			srv.URL+"/ads/not-a-number",
 			nil,
 		)
+		require.NoError(t, err)
 		req.Header.Set("Authorization", "123")
 
 		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
@@ -90,18 +90,18 @@ func TestHandlerDeleteAd(t *testing.T) {
 		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID, userID domain.UserID) error {
 			return adsdao.ErrNotFound
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		req, err := http.NewRequest(
 			http.MethodDelete,
 			srv.URL+"/ads/99",
 			nil,
 		)
+		require.NoError(t, err)
 		req.Header.Set("Authorization", "123")
 
 		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	})
@@ -110,18 +110,18 @@ func TestHandlerDeleteAd(t *testing.T) {
 		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID, userID domain.UserID) error {
 			return fmt.Errorf("unable to delete ad 99: user 123 is not the owner: %w", domain.ErrForbidden)
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		req, err := http.NewRequest(
 			http.MethodDelete,
 			srv.URL+"/ads/99",
 			nil,
 		)
+		require.NoError(t, err)
 		req.Header.Set("Authorization", "123")
 
 		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusForbidden, resp.StatusCode)
 	})
@@ -130,18 +130,18 @@ func TestHandlerDeleteAd(t *testing.T) {
 		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID, userID domain.UserID) error {
 			return errors.New("db down")
 		})
-		defer srv.Close()
+		t.Cleanup(srv.Close)
 
 		req, err := http.NewRequest(
 			http.MethodDelete,
 			srv.URL+"/ads/1",
 			nil,
 		)
+		require.NoError(t, err)
 		req.Header.Set("Authorization", "123")
 
 		resp, err := http.DefaultClient.Do(req)
-		require.NoError(t, err)
-		defer resp.Body.Close()
+		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 	})
