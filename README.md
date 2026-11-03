@@ -56,7 +56,7 @@ curl -s http://localhost:8080/ads/1
 curl -s -X POST http://localhost:8080/ads \
   -H 'Authorization: 00000000-0000-0000-0000-000000000001' \
   -H 'Content-Type: application/json' \
-  -d '{"title":"Mountain bike","price_cents":12000,"photo_url":"https://example.com/photos/bike.jpg"}'
+  -d '{"title":"Mountain bike","price":120.00,"photo_url":"https://example.com/photos/bike.jpg"}'
 
 # Bulk import ads (requires Authorization header)
 curl -i -X POST http://localhost:8080/ads/import \
@@ -78,9 +78,9 @@ curl -i -X POST http://localhost:8080/ads/import \
     ]
   }'
 
-# Delete a single ad
-curl -i -X DELETE http://localhost:8080/ads/1  \
-  -H 'Authorization: 00000000-0000-0000-0000-000000000001'
+# Delete an ad owned by the authenticated user
+curl -i -X DELETE http://localhost:8080/ads/1 \
+  -H 'Authorization: 00000000-0000-0000-0000-000000000002'
 ```
 
 For more details please refer to [openapi.yaml](ads/internal/cmd/ads-api/specs/openapi.yaml).
@@ -143,6 +143,104 @@ Each single-ad creation runs in a database transaction:
 The per-user advisory lock prevents concurrent requests from exceeding the quota. If the transaction fails, neither the ad nor its publication event is persisted.
 
 This approach also ensures that deleting an ad does not reset the quota and that bulk imports remain excluded.
+
+## Database migrations
+
+PostgreSQL migration scripts are located in `ads/internal/cmd/ads-api/dao/postgres/migrations/`, with corresponding rollback scripts in `ads/internal/cmd/ads-api/dao/postgres/rollbacks/`.
+
+For a new database initialized by Docker Compose, migration scripts are executed automatically during PostgreSQL initialization.
+
+For an existing database, migrations must be applied manually, as Docker initialization scripts are not re-executed when an existing database volume is reused.
+
+### Applying migrations to an existing database
+
+The following migrations are required:
+
+- `003_create_import_requests.sql`: creates the `import_requests` table for bulk import idempotency.
+- `004_create_ad_publications.sql`: creates the publication history table and its index for enforcing the rolling 24-hour quota.
+
+Start PostgreSQL:
+
+```shell
+docker compose up -d ads-database
+```
+
+Apply the missing migrations to the application database (`ads`), in order, before deploying the updated API:
+
+```shell
+MSYS_NO_PATHCONV=1 docker compose exec -T ads-database \
+  psql -v ON_ERROR_STOP=1 -U ads -d ads \
+  -f /docker-entrypoint-initdb.d/003_create_import_requests.sql
+
+MSYS_NO_PATHCONV=1 docker compose exec -T ads-database \
+  psql -v ON_ERROR_STOP=1 -U ads -d ads \
+  -f /docker-entrypoint-initdb.d/004_create_ad_publications.sql
+```
+
+These commands are compatible with Git Bash on Windows.
+
+Migrations should only be applied once. Skip migrations that have already been applied.
+
+The existing `001_create_tables.sql` and `002_seed_data.sql` scripts do not need to be re-executed.
+
+### Verifying the migrations
+
+Check that both tables exist:
+
+```shell
+docker compose exec -T ads-database \
+  psql -U ads -d ads \
+  -c "SELECT to_regclass('public.import_requests') AS import_requests,
+             to_regclass('public.ad_publications') AS ad_publications;"
+```
+
+Both columns should contain their respective table names rather than `NULL`.
+
+### Rolling back migrations
+
+Rollback scripts are provided to reverse database schema changes.
+
+**Warning:** These rollbacks are destructive. They drop the corresponding tables and permanently remove their stored data:
+
+- Dropping `ad_publications` removes the publication history and resets quota tracking.
+- Dropping `import_requests` removes stored idempotency keys and import results. Previously imported ads remain in the `ads` table, so retrying an old import may create duplicates.
+
+Before rolling back, stop the updated API or deploy a compatible previous version, and back up the affected data if it must be preserved.
+
+Apply rollbacks in reverse migration order:
+
+```shell
+docker compose exec -T ads-database \
+  psql -v ON_ERROR_STOP=1 -U ads -d ads \
+  < ads/internal/cmd/ads-api/dao/postgres/rollbacks/004_drop_ad_publications.sql
+
+docker compose exec -T ads-database \
+  psql -v ON_ERROR_STOP=1 -U ads -d ads \
+  < ads/internal/cmd/ads-api/dao/postgres/rollbacks/003_drop_import_requests.sql
+```
+
+These commands read the rollback scripts from the repository and send them to PostgreSQL through standard input.
+
+Rollback scripts should only be executed when explicitly reverting the corresponding features. Rolling back an application version does not necessarily require dropping its database tables.
+
+### Publication quota activation
+
+The `ad_publications` table starts empty when migration `004` is applied.
+
+Publication history is recorded only for successful single-ad creations through `POST /ads` after the quota-enabled API is deployed.
+
+Consequently:
+
+- Ads created before quota activation are not counted, even if they were created within the previous 24 hours.
+- Existing ads are not automatically added to the publication history.
+- Bulk imports through `POST /ads/import` remain exempt from the quota.
+- Deleting an ad does not remove its publication history.
+
+Users may therefore temporarily exceed 5 publications across the deployment boundary.
+
+No automatic backfill is performed because existing ads cannot necessarily be distinguished from bulk-imported ads, which are exempt from the quota.
+
+This initial transition should be considered when deploying the feature to an existing production database.
 
 ## Tests
 
