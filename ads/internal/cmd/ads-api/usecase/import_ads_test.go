@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	adsdao "github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/dao"
 	mockdao "github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/dao/mock"
@@ -83,13 +84,14 @@ func TestImportAds(t *testing.T) {
 	t.Run("nominal without idempotency key", func(t *testing.T) {
 		m := mockdao.New(t)
 
-		m.On("Begin", ctx).Return(nil).Once()
-		m.On("CreateAd", ctx, daoReqs[0]).Return(ids[0], nil).Once()
-		m.On("CreateAd", ctx, daoReqs[1]).Return(ids[1], nil).Once()
-		m.On("CreateAd", ctx, daoReqs[2]).Return(ids[2], nil).Once()
-		m.On("Commit").Return(nil).Once()
-		m.On("Rollback").Return(nil).Once()
-
+		mock.InOrder(
+			m.On("Begin", ctx).Return(nil).Once(),
+			m.On("CreateAd", ctx, daoReqs[0]).Return(ids[0], nil).Once(),
+			m.On("CreateAd", ctx, daoReqs[1]).Return(ids[1], nil).Once(),
+			m.On("CreateAd", ctx, daoReqs[2]).Return(ids[2], nil).Once(),
+			m.On("Commit").Return(nil).Once(),
+			m.On("Rollback").Return(nil).Once(),
+		)
 		got, err := usecase.NewImportAdsFunc(m)(ctx, ucReq)
 
 		require.NoError(t, err)
@@ -329,6 +331,38 @@ func TestImportAds(t *testing.T) {
 		}
 
 		emptyHash := importAdsHash(t, req.Ads)
+		emptyIDs := []domain.AdID{}
+
+		m.On("Begin", ctx).Return(nil).Once()
+		m.On("ReserveImport", ctx, adsdao.ReserveImportRequest{
+			UserID:         ownerID,
+			IdempotencyKey: req.IdempotencyKey,
+			RequestHash:    emptyHash,
+		}).Return((*adsdao.ImportResult)(nil), nil).Once()
+		m.On("CompleteImport", ctx, ownerID, req.IdempotencyKey, emptyIDs).
+			Return(nil).Once()
+		m.On("Commit").Return(nil).Once()
+		m.On("Rollback").Return(nil).Once()
+
+		got, err := usecase.NewImportAdsFunc(m)(ctx, req)
+
+		require.NoError(t, err)
+		assert.Equal(t, emptyIDs, got)
+
+		m.AssertNotCalled(t, "CreateAd")
+	})
+
+	t.Run("nil import with key is normalized to empty list", func(t *testing.T) {
+		m := mockdao.New(t)
+
+		req := usecase.ImportAdsRequest{
+			OwnerID:        ownerID,
+			IdempotencyKey: "nil-import-123",
+			Ads:            nil,
+		}
+
+		// nil and [] must produce the same idempotency hash.
+		emptyHash := importAdsHash(t, []usecase.CreateAdRequest{})
 		emptyIDs := []domain.AdID{}
 
 		m.On("Begin", ctx).Return(nil).Once()

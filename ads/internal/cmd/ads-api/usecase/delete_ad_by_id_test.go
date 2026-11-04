@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	adsdao "github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/dao"
 	mockdao "github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/dao/mock"
@@ -25,11 +26,13 @@ func TestDeleteAdByID(t *testing.T) {
 			UserID: "1",
 		}
 
-		m.On("Begin", ctx).Return(nil).Once()
-		m.On("GetAdByID", ctx, want.ID).Return(want, nil).Once()
-		m.On("DeleteAdByID", ctx, want.ID).Return(nil).Once()
-		m.On("Commit").Return(nil).Once()
-		m.On("Rollback").Return(nil).Once()
+		mock.InOrder(
+			m.On("Begin", ctx).Return(nil).Once(),
+			m.On("GetAdByID", ctx, want.ID).Return(want, nil).Once(),
+			m.On("DeleteAdByID", ctx, want.ID).Return(nil).Once(),
+			m.On("Commit").Return(nil).Once(),
+			m.On("Rollback").Return(nil).Once(),
+		)
 
 		err := usecase.NewDeleteAdByIDFunc(m)(ctx, 42, "1")
 

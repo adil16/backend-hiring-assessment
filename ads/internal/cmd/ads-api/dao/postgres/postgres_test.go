@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql/driver"
 	"errors"
 	"testing"
 	"time"
@@ -278,6 +279,60 @@ func TestTransaction(t *testing.T) {
 		require.Error(t, dao.Commit())
 		require.Error(t, dao.Rollback())
 	})
+
+	t.Run("refuses transactional operations outside a transaction", func(t *testing.T) {
+		dao, mock := newMockDAO(t)
+
+		userID := domain.UserID("user-1")
+
+		tests := []struct {
+			name string
+			call func() error
+		}{
+			{
+				name: "reserve import",
+				call: func() error {
+					_, err := dao.ReserveImport(ctx, adsdao.ReserveImportRequest{
+						UserID: userID,
+					})
+					return err
+				},
+			},
+			{
+				name: "complete import",
+				call: func() error {
+					return dao.CompleteImport(ctx, userID, "key", nil)
+				},
+			},
+			{
+				name: "lock user publications",
+				call: func() error {
+					return dao.LockUserPublications(ctx, userID)
+				},
+			},
+			{
+				name: "count recent publications",
+				call: func() error {
+					_, err := dao.CountRecentPublications(ctx, userID)
+					return err
+				},
+			},
+			{
+				name: "record publication",
+				call: func() error {
+					return dao.RecordPublication(ctx, userID)
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				require.ErrorContains(t, tt.call(), "outside a transaction")
+			})
+		}
+
+		require.NoError(t, mock.ExpectationsWereMet())
+	})
 }
 
 func TestDeleteAdByID(t *testing.T) {
@@ -339,4 +394,211 @@ func TestDeleteAdByID(t *testing.T) {
 		assert.ErrorIs(t, err, rowsErr)
 		require.NoError(t, mock.ExpectationsWereMet())
 	})
+}
+
+func TestReserveImport_ExistingImportQueryFailure(t *testing.T) {
+	ctx := context.Background()
+	dao, mock := newMockDAO(t)
+
+	req := adsdao.ReserveImportRequest{
+		UserID:         "user-1",
+		IdempotencyKey: "import-key",
+		RequestHash:    "request-hash",
+	}
+	boom := errors.New("database read failed")
+
+	mock.ExpectBegin()
+	tx, err := dao.Begin(ctx)
+	require.NoError(t, err)
+
+	// The key already exists: INSERT ... RETURNING returns no row.
+	mock.ExpectQuery("INSERT INTO import_requests").
+		WithArgs(string(req.UserID), req.IdempotencyKey, req.RequestHash).
+		WillReturnRows(sqlmock.NewRows([]string{"1"}))
+
+	// Reading the existing import fails.
+	mock.ExpectQuery("SELECT request_hash").
+		WithArgs(string(req.UserID), req.IdempotencyKey).
+		WillReturnError(boom)
+
+	_, err = tx.ReserveImport(ctx, req)
+	require.ErrorIs(t, err, boom)
+
+	mock.ExpectRollback()
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCompleteImport_QueryFailure(t *testing.T) {
+	ctx := context.Background()
+
+	db, mock, err := sqlmock.New(
+		sqlmock.ValueConverterOption(emptyIDArrayConverter{}),
+	)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	dao := &DAO{db: db}
+	userID := domain.UserID("user-1")
+	key := "import-key"
+	boom := errors.New("update failed")
+
+	mock.ExpectBegin()
+	tx, err := dao.Begin(ctx)
+	require.NoError(t, err)
+
+	mock.ExpectExec("UPDATE import_requests").
+		WithArgs(string(userID), key, "{}").
+		WillReturnError(boom)
+
+	err = tx.CompleteImport(ctx, userID, key, nil)
+	require.ErrorIs(t, err, boom)
+
+	mock.ExpectRollback()
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCompleteImport_InvalidRowsAffected(t *testing.T) {
+	ctx := context.Background()
+	userID := domain.UserID("user-1")
+	key := "import-key"
+	boom := errors.New("rows affected failed")
+
+	tests := []struct {
+		name    string
+		result  driver.Result
+		wantErr error
+	}{
+		{
+			name:    "returns error when rows affected cannot be read",
+			result:  sqlmock.NewErrorResult(boom),
+			wantErr: boom,
+		},
+		{
+			name:   "returns error when no row was updated",
+			result: sqlmock.NewResult(0, 0),
+		},
+		{
+			name:   "returns error when multiple rows were updated",
+			result: sqlmock.NewResult(0, 2),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New(
+				sqlmock.ValueConverterOption(emptyIDArrayConverter{}),
+			)
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = db.Close() })
+
+			dao := &DAO{db: db}
+
+			mock.ExpectBegin()
+			tx, err := dao.Begin(ctx)
+			require.NoError(t, err)
+
+			mock.ExpectExec("UPDATE import_requests").
+				WithArgs(string(userID), key, "{}").
+				WillReturnResult(tt.result)
+
+			err = tx.CompleteImport(ctx, userID, key, nil)
+
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+			} else {
+				require.Error(t, err)
+			}
+
+			mock.ExpectRollback()
+			require.NoError(t, tx.Rollback())
+
+			require.NoError(t, mock.ExpectationsWereMet())
+		})
+	}
+}
+
+func TestLockUserPublications_QueryFailure(t *testing.T) {
+	ctx := context.Background()
+	dao, mock := newMockDAO(t)
+
+	userID := domain.UserID("user-1")
+	boom := errors.New("advisory lock failed")
+
+	mock.ExpectBegin()
+	tx, err := dao.Begin(ctx)
+	require.NoError(t, err)
+
+	mock.ExpectQuery("SELECT pg_advisory_xact_lock").
+		WithArgs(string(userID)).
+		WillReturnError(boom)
+
+	err = tx.LockUserPublications(ctx, userID)
+	require.ErrorIs(t, err, boom)
+
+	mock.ExpectRollback()
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestCountRecentPublications_QueryFailure(t *testing.T) {
+	ctx := context.Background()
+	dao, mock := newMockDAO(t)
+
+	userID := domain.UserID("user-1")
+	boom := errors.New("count failed")
+
+	mock.ExpectBegin()
+	tx, err := dao.Begin(ctx)
+	require.NoError(t, err)
+
+	mock.ExpectQuery("SELECT COUNT").
+		WithArgs(string(userID)).
+		WillReturnError(boom)
+
+	count, err := tx.CountRecentPublications(ctx, userID)
+
+	require.ErrorIs(t, err, boom)
+	assert.Zero(t, count)
+
+	mock.ExpectRollback()
+	require.NoError(t, tx.Rollback())
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestRecordPublication_QueryFailure(t *testing.T) {
+	ctx := context.Background()
+	dao, mock := newMockDAO(t)
+
+	userID := domain.UserID("00000000-0000-0000-0000-000000000001")
+	dbErr := errors.New("insert failed")
+
+	mock.ExpectBegin()
+
+	tx, err := dao.Begin(ctx)
+	require.NoError(t, err)
+
+	mock.ExpectExec("INSERT INTO ad_publications").
+		WithArgs(string(userID)).
+		WillReturnError(dbErr)
+
+	err = tx.RecordPublication(ctx, userID)
+
+	require.ErrorIs(t, err, dbErr)
+
+	mock.ExpectRollback()
+	require.NoError(t, tx.Rollback())
+
+	require.NoError(t, mock.ExpectationsWereMet())
+}
+
+type emptyIDArrayConverter struct{}
+
+func (emptyIDArrayConverter) ConvertValue(v any) (driver.Value, error) {
+	if ids, ok := v.([]int64); ok && len(ids) == 0 {
+		return "{}", nil
+	}
+
+	return driver.DefaultParameterConverter.ConvertValue(v)
 }
