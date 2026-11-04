@@ -377,6 +377,39 @@ If `ADS_TEST_DATABASE_URL` is not set, the PostgreSQL component tests are skippe
 
 **Note:** Database creation and migration steps only need to be performed once, unless the test database is recreated. If the database already exists, apply only the missing migrations.
 
+### End-to-end tests (Docker Compose)
+
+End-to-end tests exercise the complete running stack: the Ads API, the users service and PostgreSQL, initialized with the database migrations and seed data.
+
+Unlike unit and component tests, they send real HTTP requests to the running services without mocking application dependencies.
+
+The scenarios cover authentication, ad creation and deletion, ownership checks, username enrichment, bulk import idempotency and publication quotas.
+
+Start the stack from the repository root:
+
+```bash
+docker compose up --build --wait --wait-timeout 180
+```
+
+Then run the tests:
+
+```bash
+go test -tags=e2e -count=1 -timeout=2m -v ./ads/e2e
+```
+
+The tests use `http://localhost:8080` for the Ads API and `http://localhost:8081` for the users service. These addresses can be overridden using `ADS_E2E_BASE_URL` and `USERS_E2E_BASE_URL`.
+
+**Run the E2E tests against a fresh database.** Some scenarios create and delete ads or consume publication quotas. To reset the local Docker Compose environment:
+
+```bash
+docker compose down -v
+docker compose up --build --wait --wait-timeout 180
+```
+
+**Warning:** `docker compose down -v` removes the stack's Docker volumes and their stored data.
+
+E2E tests use the `e2e` build tag, so they are excluded from the standard `go test ./...` suite. They run separately in the CI `e2e-tests` job, which starts the full stack and collects container logs on failure.
+
 ### Coverage
 
 Code coverage is measured across the Ads API, including unit and PostgreSQL component tests.

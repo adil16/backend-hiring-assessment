@@ -33,7 +33,7 @@ services:
     volumes:
       - ./ads/internal/cmd/ads-api/dao/postgres/migrations:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ads -d ads"]
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U ads -d ads"]
       interval: 2s
       timeout: 2s
       retries: 20

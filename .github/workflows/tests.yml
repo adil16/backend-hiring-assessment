@@ -131,3 +131,35 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.15.0
+
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Start full stack
+        run: docker compose up --build --wait --wait-timeout 180
+
+      - name: Run E2E tests
+        env:
+          ADS_E2E_BASE_URL: http://localhost:8080
+          USERS_E2E_BASE_URL: http://localhost:8081
+        run: go test -tags=e2e -count=1 -v ./ads/e2e
+
+      - name: Print container logs on failure
+        if: failure()
+        run: |
+          docker compose ps -a
+          docker compose logs --no-color --tail=200
+
+      - name: Stop stack and delete CI data
+        if: always()
+        run: docker compose down -v --remove-orphans
