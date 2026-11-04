@@ -26,6 +26,28 @@ docker compose up -d
 
 This starts PostgreSQL with the schema and seed data already applied, as well as the `ads` api.
 
+### Build metadata
+
+The Ads API logs its version, Git commit and build date at startup.
+
+To inject the current project version and Git commit into the Docker image, run the following command from the repository root:
+
+```bash
+VERSION="$(cat VERSION)" \
+GIT_COMMIT="$(git rev-parse --short=12 HEAD)" \
+docker compose up --build --wait --wait-timeout 180
+```
+
+The build date is generated automatically in UTC by the Dockerfile.
+
+If `VERSION` or `GIT_COMMIT` is not provided, the build uses the default values `dev` and `unknown`, respectively.
+
+The metadata is included in the structured JSON startup log and can be inspected with:
+
+```bash
+docker compose logs ads-api
+```
+
 ### Logging
 
 The ads API uses structured JSON logging through Go's standard `log/slog` package.
