@@ -376,3 +376,43 @@ go test ./...
 If `ADS_TEST_DATABASE_URL` is not set, the PostgreSQL component tests are skipped, so the regular test suite can still run without a database.
 
 **Note:** Database creation and migration steps only need to be performed once, unless the test database is recreated. If the database already exists, apply only the missing migrations.
+
+### Coverage
+
+Code coverage is measured across the Ads API, including unit and PostgreSQL component tests.
+
+With the test database running and initialized as described above, generate a coverage report from the repository root:
+
+```bash
+ADS_TEST_DATABASE_URL="postgres://ads:ads@localhost:5432/ads_test?sslmode=disable" \
+go test -count=1 \
+  -covermode=atomic \
+  -coverpkg=./ads/internal/cmd/ads-api/... \
+  -coverprofile=coverage.out \
+  ./...
+```
+
+Display coverage by function and the overall percentage:
+
+```bash
+go tool cover -func=coverage.out
+
+# Overall coverage only
+go tool cover -func=coverage.out | tail -n 1
+```
+
+Visualize covered and uncovered code in a browser:
+
+```bash
+go tool cover -html=coverage.out
+```
+
+Alternatively, generate a standalone HTML report:
+
+```bash
+go tool cover -html=coverage.out -o coverage.html
+```
+
+The `component-tests` CI job also generates coverage reports with the Go race detector enabled. The overall coverage is displayed in the GitHub Actions job summary, while `coverage.out` and `coverage.html` are available as downloadable artifacts.
+
+Coverage includes the DAO mocks and should be treated as an indicator of test execution, not a guarantee of test quality. No minimum coverage threshold is enforced.

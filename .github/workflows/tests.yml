@@ -46,6 +46,7 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
+      CGO_ENABLED: "1"
       ADS_TEST_DATABASE_URL: "postgres://ads:ads@localhost:5432/ads_test?sslmode=disable"
 
     services:
@@ -85,10 +86,33 @@ jobs:
               < "ads/internal/cmd/ads-api/dao/postgres/migrations/$migration"
           done
 
-      - name: Run component tests
+      - name: Run tests with coverage
+        env:
+          ADS_TEST_DATABASE_URL: postgres://ads:ads@localhost:5432/ads_test?sslmode=disable
         run: |
-          go test -race -count=1 -v \
-            ./ads/internal/cmd/ads-api/dao/postgres
+          go test -race -count=1 \
+            -covermode=atomic \
+            -coverpkg=./ads/internal/cmd/ads-api/... \
+            -coverprofile=coverage.out \
+            ./...
+
+          go tool cover -html=coverage.out -o coverage.html
+
+          {
+            echo "### Ads API coverage"
+            echo '```'
+            go tool cover -func=coverage.out | tail -n 1
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v7
+        with:
+          name: ads-api-coverage
+          path: |
+            coverage.out
+            coverage.html
+          if-no-files-found: error
 
   lint:
     name: Go lint
