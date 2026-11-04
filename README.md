@@ -34,6 +34,10 @@ There are 2 entities in this sample:
 
 ## API
 
+For the complete API contract, see the
+[OpenAPI specification](ads/internal/cmd/ads-api/specs/openapi.yaml).
+
+
 | Method | Path          | Auth | Description                                                                       |
 |--------|---------------|------|-----------------------------------------------------------------------------------|
 | `POST` | `/ads`        | yes | Create an ad                                                                      |
@@ -41,6 +45,17 @@ There are 2 entities in this sample:
 | `GET` | `/ads`        | no | List ads (filterable by `title`, `user_id`, `min_price_cents`, `max_price_cents`) |
 | `POST` | `/ads/import` | yes | Bulk ad import                                                                    |
 | `DELETE` | `/ads/{id}`   | yes | Delete a single ad                                                              |
+
+
+### Price representation
+
+The API exposes `price` in euros in request and response bodies. The existing `price_cents` field remains supported but is deprecated for backward compatibility.
+
+Prices are stored internally as integer cents (`int64`). Incoming euro amounts are converted using exact decimal arithmetic to avoid floating-point precision issues. Values with fractional cents or exceeding the supported integer range are rejected.
+
+Search filters (`min_price_cents` and `max_price_cents`) remain expressed in cents and are not deprecated.
+
+### Examples
 
 ```bash
 # Health check
@@ -82,8 +97,6 @@ curl -i -X POST http://localhost:8080/ads/import \
 curl -i -X DELETE http://localhost:8080/ads/1 \
   -H 'Authorization: 00000000-0000-0000-0000-000000000002'
 ```
-
-For more details please refer to [openapi.yaml](ads/internal/cmd/ads-api/specs/openapi.yaml).
 
 ## Authentication
 
