@@ -88,3 +88,6 @@ type sentinelError string
 
 // Error implements the error interface.
 func (e sentinelError) Error() string { return string(e) }
+
+// Ensure sentinelError implements error as a value.
+var _ error = sentinelError("")

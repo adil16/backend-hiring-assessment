@@ -55,19 +55,3 @@ func (uc getAdByID) getAdByID(ctx context.Context, id domain.AdID) (domain.AdWit
 		Username: user.Nickname,
 	}, nil
 }
-
-// TODO: remove this code
-// func (uc getAdByID) getAdByIDLegacy(ctx context.Context, id model.AdID) (model.Ad, error) {
-// 	ads, err := uc.adDAO.SearchAds(ctx, adsdao.SearchAdsRequest{})
-// 	if err != nil {
-// 		return model.Ad{}, fmt.Errorf("unable to list ads: %w", err)
-// 	}
-//
-// 	for _, ad := range ads {
-// 		if ad.ID == id {
-// 			return ad, nil
-// 		}
-// 	}
-//
-// 	return model.Ad{}, adsdao.ErrNotFound
-// }
