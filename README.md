@@ -61,6 +61,22 @@ For the complete API contract, see the
 | `DELETE` | `/ads/{id}`   | yes | Delete a single ad                                                              |
 
 
+### Get ad by ID
+
+`GET /ads/{id}` retrieves the ad from PostgreSQL and enriches the response with the owner's `username` from the users service.
+
+| Scenario | HTTP status | Behavior |
+|---|---|---|
+| Ad found and user found | `200 OK` | Returns the ad with its username |
+| Ad not found | `404 Not Found` | Returns no ad |
+| Owner not found in the users service | `200 OK` | Returns the ad with an empty username |
+| Users service failure | `500 Internal Server Error` | Returns an error instead of an incomplete response |
+| PostgreSQL failure | `500 Internal Server Error` | Returns an error |
+
+Technical failures are propagated and logged. The API does not silently return partial responses when the users service is unavailable.
+
+**Read performance:** This endpoint is expected to handle high read traffic. Fetching the username for every request introduces additional latency and load on the users service. A bounded cache indexed by user ID, with a configurable TTL, could be considered as a future optimization. Such a cache would require explicit trade-offs around data freshness and invalidation.
+
 ### Price representation
 
 The API exposes `price` in euros in request and response bodies. The existing `price_cents` field remains supported but is deprecated for backward compatibility.
