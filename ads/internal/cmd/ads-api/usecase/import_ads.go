@@ -61,7 +61,7 @@ func (uc importAds) importAds(ctx context.Context, req ImportAdsRequest) ([]doma
 
 	tx, err := uc.adDAO.Begin(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("unable to begin transaction: %w", err)
+		return nil, fmt.Errorf("begin transaction: %w", err)
 	}
 
 	defer func() {
@@ -75,7 +75,7 @@ func (uc importAds) importAds(ctx context.Context, req ImportAdsRequest) ([]doma
 			RequestHash:    requestHash,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("unable to reserve import: %w", err)
+			return nil, fmt.Errorf("reserve import: %w", err)
 		}
 
 		if existing != nil {
@@ -98,7 +98,7 @@ func (uc importAds) importAds(ctx context.Context, req ImportAdsRequest) ([]doma
 			OwnerID:    ad.OwnerID,
 		})
 		if err != nil {
-			return nil, fmt.Errorf("unable to import ad at index %d: %w", i, err)
+			return nil, fmt.Errorf("create ad at index %d: %w", i, err)
 		}
 
 		ids = append(ids, id)
@@ -106,12 +106,12 @@ func (uc importAds) importAds(ctx context.Context, req ImportAdsRequest) ([]doma
 
 	if req.IdempotencyKey != "" {
 		if err := tx.CompleteImport(ctx, req.OwnerID, req.IdempotencyKey, ids); err != nil {
-			return nil, fmt.Errorf("unable to complete import: %w", err)
+			return nil, fmt.Errorf("complete import: %w", err)
 		}
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil, fmt.Errorf("unable to commit transaction: %w", err)
+		return nil, fmt.Errorf("commit transaction: %w", err)
 	}
 
 	return ids, nil

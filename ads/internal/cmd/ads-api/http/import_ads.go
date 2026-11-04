@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/domain"
@@ -71,6 +72,12 @@ func handlerImportAds(importAds usecase.ImportAdsFunc) http.HandlerFunc {
 				rw.WriteHeader(http.StatusConflict)
 				return
 			}
+
+			slog.ErrorContext(r.Context(),
+				"failed to import ads",
+				"operation", "import_ads",
+				"error", err,
+			)
 
 			rw.WriteHeader(http.StatusInternalServerError)
 			return

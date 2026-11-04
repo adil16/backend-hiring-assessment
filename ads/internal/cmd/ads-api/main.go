@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"log/slog"
 	"os"
 
@@ -15,6 +16,10 @@ import (
 )
 
 func main() {
+	if err := configureLogger(); err != nil {
+		log.Fatal(err)
+	}
+
 	slog.Info("starting ads-api",
 		"version", version.Version,
 		"commit", version.GitCommit,

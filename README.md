@@ -26,6 +26,20 @@ docker compose up -d
 
 This starts PostgreSQL with the schema and seed data already applied, as well as the `ads` api.
 
+### Logging
+
+The ads API uses structured JSON logging through Go's standard `log/slog` package.
+
+The log level is configurable via the `LOG_LEVEL` environment variable. Supported values are `debug`, `info`, `warn`, and `error`. The default is `info`.
+
+To enable debug logging with Docker Compose:
+
+```bash
+LOG_LEVEL=debug docker compose up -d
+```
+
+Unexpected application errors are logged at `ERROR` level with the operation name and relevant diagnostic context. Expected business errors are handled through their HTTP status codes without being logged as application errors.
+
 ## Model
 
 There are 2 entities in this sample:

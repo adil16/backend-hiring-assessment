@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	adsdao "github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/dao"
@@ -28,6 +29,12 @@ func handlerDeleteAd(deleteAd usecase.DeleteAdByIDFunc) http.HandlerFunc {
 			} else if errors.Is(err, domain.ErrForbidden) {
 				rw.WriteHeader(http.StatusForbidden)
 			} else {
+				slog.ErrorContext(r.Context(),
+					"failed to delete ad",
+					"operation", "delete_ad",
+					"ad_id", adID,
+					"error", err,
+				)
 				rw.WriteHeader(http.StatusInternalServerError)
 			}
 

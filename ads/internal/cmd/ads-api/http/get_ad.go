@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -36,6 +37,8 @@ func adToGetAdResponse(a domain.AdWithUsername) getAdResponse {
 }
 
 func handlerGetAd(getAd usecase.GetAdByIDFunc) http.HandlerFunc {
+	const operation = "get_ad"
+
 	return func(rw http.ResponseWriter, r *http.Request) {
 		adID, err := adIDFromURL(r)
 		if err != nil {
@@ -49,6 +52,12 @@ func handlerGetAd(getAd usecase.GetAdByIDFunc) http.HandlerFunc {
 			if errors.Is(err, adsdao.ErrNotFound) {
 				rw.WriteHeader(http.StatusNotFound)
 			} else {
+				slog.ErrorContext(r.Context(),
+					"failed to get ad",
+					"operation", operation,
+					"ad_id", adID,
+					"error", err,
+				)
 				rw.WriteHeader(http.StatusInternalServerError)
 			}
 

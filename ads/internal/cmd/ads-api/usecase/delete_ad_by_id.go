@@ -25,7 +25,7 @@ func NewDeleteAdByIDFunc(adDAO adsdao.DAO) DeleteAdByIDFunc {
 func (uc deleteAdByID) deleteAdByID(ctx context.Context, id domain.AdID, userID domain.UserID) error {
 	tx, err := uc.adDAO.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("unable to begin transaction: %w", err)
+		return fmt.Errorf("begin transaction: %w", err)
 	}
 
 	defer func() {
@@ -35,7 +35,7 @@ func (uc deleteAdByID) deleteAdByID(ctx context.Context, id domain.AdID, userID 
 	ad, err := tx.GetAdByID(ctx, id)
 
 	if err != nil {
-		return fmt.Errorf("unable to get ad %s: %w", id, err)
+		return fmt.Errorf("get ad by ID: %w", err)
 	}
 
 	if userID != ad.UserID {
@@ -44,11 +44,11 @@ func (uc deleteAdByID) deleteAdByID(ctx context.Context, id domain.AdID, userID 
 
 	err = tx.DeleteAdByID(ctx, id)
 	if err != nil {
-		return fmt.Errorf("unable to delete ad %s: %w", id, err)
+		return fmt.Errorf("delete ad by ID: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("unable to commit transaction: %w", err)
+		return fmt.Errorf("commit transaction: %w", err)
 	}
 
 	return nil

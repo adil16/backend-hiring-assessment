@@ -152,7 +152,7 @@ func (d *DAO) GetAdByID(ctx context.Context, id domain.AdID) (domain.Ad, error) 
 
 	ad, err := scanAd(d.runner().QueryRowContext(ctx, query, int64(id)))
 	if err != nil {
-		return domain.Ad{}, fmt.Errorf("unable to get ad: %w", err)
+		return domain.Ad{}, fmt.Errorf("unable to get ad %s: %w", id, err)
 	}
 
 	return ad, nil
@@ -185,12 +185,12 @@ func (d *DAO) DeleteAdByID(ctx context.Context, id domain.AdID) error {
 
 	sqlResult, err := d.runner().ExecContext(ctx, query, int64(id))
 	if err != nil {
-		return fmt.Errorf("unable to delete ad: %w", err)
+		return fmt.Errorf("unable to delete ad %s: %w", id, err)
 	}
 
 	rowsAffected, err := sqlResult.RowsAffected()
 	if err != nil {
-		return fmt.Errorf("unable to get rows affected: %w", err)
+		return fmt.Errorf("unable to get rows affected for ad %s: %w", id, err)
 	}
 
 	if rowsAffected == 0 {

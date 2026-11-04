@@ -39,7 +39,7 @@ func NewCreateAdFunc(adDAO adsdao.DAO) CreateAdFunc {
 func (uc createAd) createAd(ctx context.Context, req CreateAdRequest) (domain.AdID, error) {
 	tx, err := uc.adDAO.Begin(ctx)
 	if err != nil {
-		return 0, fmt.Errorf("unable to begin transaction: %w", err)
+		return 0, fmt.Errorf("begin transaction: %w", err)
 	}
 
 	defer func() {
@@ -48,13 +48,13 @@ func (uc createAd) createAd(ctx context.Context, req CreateAdRequest) (domain.Ad
 
 	// Serialize publication attempts for this user.
 	if err := tx.LockUserPublications(ctx, req.OwnerID); err != nil {
-		return 0, fmt.Errorf("unable to lock user publications: %w", err)
+		return 0, fmt.Errorf("lock user publications: %w", err)
 	}
 
 	// Check the rolling 24-hour quota.
 	count, err := tx.CountRecentPublications(ctx, req.OwnerID)
 	if err != nil {
-		return 0, fmt.Errorf("unable to count recent publications: %w", err)
+		return 0, fmt.Errorf("count recent publications: %w", err)
 	}
 
 	if count >= maxDailyPublications {
@@ -69,16 +69,16 @@ func (uc createAd) createAd(ctx context.Context, req CreateAdRequest) (domain.Ad
 		OwnerID:    req.OwnerID,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("unable to create ad: %w", err)
+		return 0, fmt.Errorf("create ad: %w", err)
 	}
 
 	// Record the publication only for successful single-ad creation.
 	if err := tx.RecordPublication(ctx, req.OwnerID); err != nil {
-		return 0, fmt.Errorf("unable to record publication: %w", err)
+		return 0, fmt.Errorf("record publication: %w", err)
 	}
 
 	if err := tx.Commit(); err != nil {
-		return 0, fmt.Errorf("unable to commit transaction: %w", err)
+		return 0, fmt.Errorf("commit transaction: %w", err)
 	}
 
 	return adID, nil

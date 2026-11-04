@@ -8,6 +8,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 | Type | Description |
 |---|---|
+| Added | Introduced structured JSON logging with configurable log levels via `LOG_LEVEL`. |
 | Added | Enforced a maximum of 5 ad publications per rolling 24-hour window through `POST /ads`. |
 | Added | Added `429 Too Many Requests` response when the publication quota is exceeded. |
 | Added | Introduced an `ad_publications` table with a database migration, rollback script, and composite index for tracking publication history. |

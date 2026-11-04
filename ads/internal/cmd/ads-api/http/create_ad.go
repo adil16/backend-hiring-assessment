@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"math/big"
 	"net/http"
 
@@ -48,6 +49,12 @@ func handlerCreateAd(createAd usecase.CreateAdFunc) http.HandlerFunc {
 				http.Error(rw, "publication quota exceeded", http.StatusTooManyRequests)
 				return
 			}
+
+			slog.ErrorContext(r.Context(),
+				"failed to create ad",
+				"operation", "create_ad",
+				"error", err,
+			)
 
 			http.Error(rw, "internal server error", http.StatusInternalServerError)
 			return

@@ -38,7 +38,7 @@ func (uc listAds) listAds(ctx context.Context, req ListAdsRequest) ([]domain.Ad,
 		Title:         req.Title,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("unable to search ads: %w", err)
+		return nil, fmt.Errorf("search ads: %w", err)
 	}
 
 	return ads, nil

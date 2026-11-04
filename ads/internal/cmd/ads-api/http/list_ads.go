@@ -2,6 +2,7 @@ package http
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -71,6 +72,12 @@ func handlerListAds(listAds usecase.ListAdsFunc) http.HandlerFunc {
 
 		ads, err := listAds(r.Context(), req)
 		if err != nil {
+			slog.ErrorContext(r.Context(),
+				"failed to list ads",
+				"operation", "list_ads",
+				"error", err,
+			)
+
 			rw.WriteHeader(http.StatusInternalServerError)
 			return
 		}

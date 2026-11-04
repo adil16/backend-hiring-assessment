@@ -37,7 +37,7 @@ func NewGetAdByIDFunc(adDAO adsdao.DAO, userClient UserGetter) GetAdByIDFunc {
 func (uc getAdByID) getAdByID(ctx context.Context, id domain.AdID) (domain.AdWithUsername, error) {
 	ad, err := uc.adDAO.GetAdByID(ctx, id)
 	if err != nil {
-		return domain.AdWithUsername{}, fmt.Errorf("unable to get ad %s: %w", id, err)
+		return domain.AdWithUsername{}, fmt.Errorf("get ad by ID: %w", err)
 	}
 
 	user, err := uc.userClient.GetUserByID(ctx, ad.UserID)
@@ -47,7 +47,7 @@ func (uc getAdByID) getAdByID(ctx context.Context, id domain.AdID) (domain.AdWit
 		}
 
 		return domain.AdWithUsername{},
-			fmt.Errorf("unable to get user %s: %w", ad.UserID, err)
+			fmt.Errorf("get user by ID: %w", err)
 	}
 
 	return domain.AdWithUsername{
