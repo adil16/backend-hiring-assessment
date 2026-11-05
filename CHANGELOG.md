@@ -2,52 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
-This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and adheres to [Semantic Versioning](https://semver.org/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-| Type | Description |
-|---|---|
-| Added | HTTP input validation for ad titles, photo URLs, user UUIDs and price filters, with whitespace normalization. |
-| Added | Introduced Docker Compose end-to-end tests covering authentication, ad lifecycle, ownership, bulk import idempotency, and publication quotas, with a dedicated CI job. |
-| Added | Introduced structured JSON logging with configurable log levels via `LOG_LEVEL`. |
-| Added | Enforced a maximum of 5 ad publications per rolling 24-hour window through `POST /ads`. |
-| Added | Added `429 Too Many Requests` response when the publication quota is exceeded. |
-| Added | Introduced an `ad_publications` table with a database migration, rollback script, and composite index for tracking publication history. |
-| Changed | Updated use case, DAO, HTTP tests, PostgreSQL component tests, OpenAPI specification, and README to support the publication quota. |
-| Fixed | Made bulk ad imports atomic using a single PostgreSQL transaction to prevent partial imports. |
-| Fixed | Prevented duplicate ads when retrying bulk imports with the same idempotency key. |
-| Added | Added optional `Idempotency-Key` header to `POST /ads/import`, scoped to the authenticated user. |
-| Added | Added persistent import tracking with request hashes and generated ad IDs. |
-| Added | Added `409 Conflict` response when an idempotency key is reused with a different payload. |
-| Added | Added database migration and rollback script for the `import_requests` table. |
-| Added | Added PostgreSQL component tests for idempotency, rollback, and concurrent requests. |
-| Changed | Introduced a dedicated transactional `ImportAds` use case. |
-| Changed | Updated HTTP handlers, unit tests, OpenAPI specification, and README for bulk import idempotency. |
-| Changed | Added field username to get ad by ID response. |
-| Added | Added delete ad by ID feature. |
-| Fixed | Fixed GetAdByID usecase. |
-| Added | Introduced project versioning using a dedicated VERSION file. |
-| Added | Added build-time version information injection using Go linker flags. |
-| Added | Introduced a CHANGELOG.md to document project changes and releases. |
-| Changed | Updated Docker build configuration to support version and Git commit injection. |
+### Added
+
+- `DELETE /ads/{adID}` with ownership checks.
+- A limit of five ad publications per rolling 24-hour window through `POST /ads`, with a `429 Too Many Requests` response when exceeded.
+- Optional, user-scoped `Idempotency-Key` support for `POST /ads/import`, with a `409 Conflict` response when a key is reused with a different payload.
+- Added database tables to enforce publication quotas and prevent duplicate bulk imports including migrations and rollback scripts.
+- HTTP input validation for ad titles, photo URIs, user UUIDs, and price filters, with whitespace normalization for titles and photo URIs.
+- Structured JSON logging with configurable levels through `LOG_LEVEL`.
+- Project versioning through a `VERSION` file and build-time metadata injection using Go linker flags.
+- Docker Compose end-to-end tests for authorization, ad lifecycle, ownership, import idempotency, and publication quotas, with a dedicated CI job.
+- PostgreSQL component tests for import idempotency, transaction rollback, and concurrent requests.
+
+### Changed
+
+- Included the username in the `GET /ads/{adID}` response.
+- Moved bulk imports to a dedicated transactional `ImportAds` use case.
+- Updated Docker builds to support version and Git commit injection.
+- Updated the OpenAPI specification, README, and related tests to reflect the new API behavior.
+
+### Fixed
+
+- Corrected ad retrieval by ID.
+- Made bulk imports atomic to prevent partial imports.
+- Prevented duplicate ads when retrying an import with the same idempotency key.
 
 ## [0.1.0] - 2026-10-30
 
-Initial release of the project.
+### Added
 
-| Type | Description |
-|---|---|
-| Added | Initial commit |
-
-
----
-
-### Change Types
-
-- **Added**: New features.
-- **Changed**: Changes to existing functionality.
-- **Deprecated**: Features that will be removed in future releases.
-- **Removed**: Removed features.
-- **Fixed**: Bug fixes.
-- **Security**: Security-related improvements or fixes.
+- Initial release of the project.
