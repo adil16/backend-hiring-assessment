@@ -6,10 +6,18 @@ import (
 	"log/slog"
 	"math/big"
 	"net/http"
+	"net/url"
+	"strings"
+	"unicode/utf8"
 
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/domain"
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/usecase"
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/common/middleware"
+)
+
+const (
+	maxTitleLength    = 200
+	maxPhotoURLLength = 2048
 )
 
 type createAdBody struct {
@@ -32,6 +40,11 @@ func handlerCreateAd(createAd usecase.CreateAdFunc) http.HandlerFunc {
 			return
 		}
 
+		if err := body.validateFields(); err != nil {
+			rw.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
 		priceCents, err := body.priceInCents()
 		if err != nil {
 			rw.WriteHeader(http.StatusBadRequest)
@@ -39,9 +52,9 @@ func handlerCreateAd(createAd usecase.CreateAdFunc) http.HandlerFunc {
 		}
 
 		adID, err := createAd(r.Context(), usecase.CreateAdRequest{
-			Title:      body.Title,
+			Title:      strings.TrimSpace(body.Title),
 			PriceCents: priceCents,
-			PhotoURL:   body.PhotoURL,
+			PhotoURL:   strings.TrimSpace(body.PhotoURL),
 			OwnerID:    domain.UserID(middleware.UserIDFromRequest(r)),
 		})
 		if err != nil {
@@ -98,4 +111,36 @@ func (b createAdBody) priceInCents() (int64, error) {
 	}
 
 	return cents.Num().Int64(), nil
+}
+
+func (b createAdBody) validateFields() error {
+	title := strings.TrimSpace(b.Title)
+	photoURL := strings.TrimSpace(b.PhotoURL)
+
+	if title == "" {
+		return errors.New("title cannot be empty")
+	}
+
+	if utf8.RuneCountInString(title) > maxTitleLength {
+		return errors.New("title is too long")
+	}
+
+	if photoURL == "" {
+		return errors.New("photo URL is required")
+	}
+
+	if len(photoURL) > maxPhotoURLLength {
+		return errors.New("photo URL too long")
+	}
+
+	u, err := url.Parse(photoURL)
+	if err != nil || !u.IsAbs() {
+		return errors.New("invalid photo URL")
+	}
+
+	if (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() == "" {
+		return errors.New("invalid photo URL")
+	}
+
+	return nil
 }

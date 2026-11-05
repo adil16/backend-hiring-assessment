@@ -19,7 +19,7 @@ import (
 
 func newImportAdsServer(fn usecase.ImportAdsFunc) *httptest.Server {
 	mux := http.NewServeMux()
-	mux.Handle("POST /ads/import", middleware.RequireAuth(handlerImportAds(fn)))
+	mux.Handle("POST /ads/import", middleware.RequireAuth(middleware.RequireValidUUIDUserID(handlerImportAds(fn))))
 	return httptest.NewServer(mux)
 }
 
@@ -70,7 +70,7 @@ func TestHandlerImportAds(t *testing.T) {
 			{Title: "car", PriceCents: new(int64(200000)), PhotoURL: "https://example.com/car.jpg"},
 		}}
 
-		resp := postJSON(t, srv.URL+"/ads/import", body, "user-1")
+		resp := postJSON(t, srv.URL+"/ads/import", body, "00000000-0000-0000-0000-000000000001")
 
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.Equal(t, 1, calls)
@@ -109,7 +109,7 @@ func TestHandlerImportAds(t *testing.T) {
 			},
 		}}
 
-		resp := postJSON(t, srv.URL+"/ads/import", body, "user-42")
+		resp := postJSON(t, srv.URL+"/ads/import", body, "00000000-0000-0000-0000-000000000042")
 
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.Equal(t, 1, calls)
@@ -120,7 +120,7 @@ func TestHandlerImportAds(t *testing.T) {
 		assert.Equal(t, int64(120050), received.Ads[2].PriceCents)
 
 		for _, ad := range received.Ads {
-			assert.Equal(t, domain.UserID("user-42"), ad.OwnerID)
+			assert.Equal(t, domain.UserID("00000000-0000-0000-0000-000000000042"), ad.OwnerID)
 		}
 
 		var got importAdsResponse
@@ -142,14 +142,14 @@ func TestHandlerImportAds(t *testing.T) {
 			{Title: "scooter", PriceCents: new(int64(8000)), PhotoURL: "https://example.com/scooter.jpg"},
 		}}
 
-		resp := postJSON(t, srv.URL+"/ads/import", body, "user-42")
+		resp := postJSON(t, srv.URL+"/ads/import", body, "00000000-0000-0000-0000-000000000042")
 
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		require.Len(t, received.Ads, 2)
 
-		assert.Equal(t, domain.UserID("user-42"), received.OwnerID)
-		assert.Equal(t, domain.UserID("user-42"), received.Ads[0].OwnerID)
-		assert.Equal(t, domain.UserID("user-42"), received.Ads[1].OwnerID)
+		assert.Equal(t, domain.UserID("00000000-0000-0000-0000-000000000042"), received.OwnerID)
+		assert.Equal(t, domain.UserID("00000000-0000-0000-0000-000000000042"), received.Ads[0].OwnerID)
+		assert.Equal(t, domain.UserID("00000000-0000-0000-0000-000000000042"), received.Ads[1].OwnerID)
 	})
 
 	t.Run("returns 201 with empty IDs when body has no ads", func(t *testing.T) {
@@ -165,7 +165,7 @@ func TestHandlerImportAds(t *testing.T) {
 			t,
 			srv.URL+"/ads/import",
 			importAdsBody{Ads: []createAdBody{}},
-			"user-1",
+			"00000000-0000-0000-0000-000000000001",
 		)
 
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
@@ -174,6 +174,32 @@ func TestHandlerImportAds(t *testing.T) {
 		var got importAdsResponse
 		require.NoError(t, json.NewDecoder(resp.Body).Decode(&got))
 		assert.Equal(t, []int64{}, got.IDs)
+	})
+
+	t.Run("trims title and photo URL for imported ads", func(t *testing.T) {
+		var received usecase.ImportAdsRequest
+
+		srv := newImportAdsServer(func(_ context.Context, req usecase.ImportAdsRequest) ([]domain.AdID, error) {
+			received = req
+			return []domain.AdID{1}, nil
+		})
+		t.Cleanup(srv.Close)
+
+		body := importAdsBody{Ads: []createAdBody{
+			{
+				Title:      "  mountain bike  ",
+				PriceCents: new(int64(15000)),
+				PhotoURL:   "  https://example.com/bike.jpg  ",
+			},
+		}}
+
+		resp := postJSON(t, srv.URL+"/ads/import", body, "00000000-0000-0000-0000-000000000001")
+		defer resp.Body.Close()
+
+		require.Equal(t, http.StatusCreated, resp.StatusCode)
+		require.Len(t, received.Ads, 1)
+		assert.Equal(t, "mountain bike", received.Ads[0].Title)
+		assert.Equal(t, "https://example.com/bike.jpg", received.Ads[0].PhotoURL)
 	})
 
 	t.Run("returns 401 when Authorization header is missing", func(t *testing.T) {
@@ -191,6 +217,21 @@ func TestHandlerImportAds(t *testing.T) {
 		assert.Zero(t, calls)
 	})
 
+	t.Run("returns 400 when Authorization header contains an invalid UUID", func(t *testing.T) {
+		calls := 0
+
+		srv := newImportAdsServer(func(_ context.Context, _ usecase.ImportAdsRequest) ([]domain.AdID, error) {
+			calls++
+			return nil, nil
+		})
+		t.Cleanup(srv.Close)
+
+		resp := postJSON(t, srv.URL+"/ads/import", importAdsBody{}, "nimportequoi")
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+		assert.Zero(t, calls)
+	})
+
 	t.Run("returns 400 on invalid body", func(t *testing.T) {
 		calls := 0
 
@@ -202,7 +243,7 @@ func TestHandlerImportAds(t *testing.T) {
 
 		req, err := http.NewRequest(http.MethodPost, srv.URL+"/ads/import", nil)
 		require.NoError(t, err)
-		req.Header.Set("Authorization", "user-1")
+		req.Header.Set("Authorization", "00000000-0000-0000-0000-000000000001")
 
 		resp, err := http.DefaultClient.Do(req)
 		requireHTTPResponse(t, resp, err)
@@ -224,18 +265,21 @@ func TestHandlerImportAds(t *testing.T) {
 			{
 				Title:      "bike",
 				PriceCents: new(int64(5000)),
+				PhotoURL:   "https://example.com/bike.jpg",
 			},
 			{
-				Title: "scooter",
-				Price: ptrJSONNumber("89.99"),
+				Title:    "scooter",
+				Price:    ptrJSONNumber("89.99"),
+				PhotoURL: "https://example.com/scooter.jpg",
 			},
 			{
-				Title: "car",
-				Price: ptrJSONNumber("12.345"),
+				Title:    "car",
+				Price:    ptrJSONNumber("12.345"),
+				PhotoURL: "https://example.com/car.jpg",
 			},
 		}}
 
-		resp := postJSON(t, srv.URL+"/ads/import", body, "user-1")
+		resp := postJSON(t, srv.URL+"/ads/import", body, "00000000-0000-0000-0000-000000000001")
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.Zero(t, calls)
@@ -254,18 +298,79 @@ func TestHandlerImportAds(t *testing.T) {
 			{
 				Title:      "bike",
 				PriceCents: new(int64(5000)),
+				PhotoURL:   "https://example.com/bike.jpg",
 			},
 			{
 				Title:      "scooter",
 				PriceCents: new(int64(8999)),
 				Price:      ptrJSONNumber("89.99"),
+				PhotoURL:   "https://example.com/scooter.jpg",
 			},
 		}}
 
-		resp := postJSON(t, srv.URL+"/ads/import", body, "user-1")
+		resp := postJSON(t, srv.URL+"/ads/import", body, "00000000-0000-0000-0000-000000000001")
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 		assert.Zero(t, calls)
+	})
+
+	t.Run("returns 400 when an ad has invalid fields", func(t *testing.T) {
+		tests := []struct {
+			name      string
+			invalidAd createAdBody
+		}{
+			{
+				name: "blank title",
+				invalidAd: createAdBody{
+					Title:      "   ",
+					PriceCents: new(int64(8000)),
+					PhotoURL:   "https://example.com/scooter.jpg",
+				},
+			},
+			{
+				name: "invalid photo URL",
+				invalidAd: createAdBody{
+					Title:      "scooter",
+					PriceCents: new(int64(8000)),
+					PhotoURL:   "not-a-url",
+				},
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				calls := 0
+
+				srv := newImportAdsServer(func(
+					_ context.Context,
+					_ usecase.ImportAdsRequest,
+				) ([]domain.AdID, error) {
+					calls++
+					return nil, nil
+				})
+				t.Cleanup(srv.Close)
+
+				body := importAdsBody{Ads: []createAdBody{
+					{
+						Title:      "bike",
+						PriceCents: new(int64(5000)),
+						PhotoURL:   "https://example.com/bike.jpg",
+					},
+					tt.invalidAd,
+				}}
+
+				resp := postJSON(
+					t,
+					srv.URL+"/ads/import",
+					body,
+					"00000000-0000-0000-0000-000000000001",
+				)
+				defer resp.Body.Close()
+
+				assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+				assert.Zero(t, calls)
+			})
+		}
 	})
 
 	t.Run("returns 500 when import usecase fails", func(t *testing.T) {
@@ -284,7 +389,7 @@ func TestHandlerImportAds(t *testing.T) {
 			{Title: "car", PriceCents: new(int64(200000)), PhotoURL: "https://example.com/car.jpg"},
 		}}
 
-		resp := postJSON(t, srv.URL+"/ads/import", body, "user-1")
+		resp := postJSON(t, srv.URL+"/ads/import", body, "00000000-0000-0000-0000-000000000001")
 
 		assert.Equal(t, http.StatusInternalServerError, resp.StatusCode)
 		assert.Equal(t, 1, calls)
@@ -300,11 +405,11 @@ func TestHandlerImportAds(t *testing.T) {
 			calls++
 
 			assert.Equal(t, "import-123", req.IdempotencyKey)
-			assert.Equal(t, domain.UserID("user-42"), req.OwnerID)
+			assert.Equal(t, domain.UserID("00000000-0000-0000-0000-000000000042"), req.OwnerID)
 			assert.Len(t, req.Ads, 1)
 
 			if len(req.Ads) == 1 {
-				assert.Equal(t, domain.UserID("user-42"), req.Ads[0].OwnerID)
+				assert.Equal(t, domain.UserID("00000000-0000-0000-0000-000000000042"), req.Ads[0].OwnerID)
 			}
 
 			return []domain.AdID{10}, nil
@@ -323,7 +428,7 @@ func TestHandlerImportAds(t *testing.T) {
 			t,
 			srv.URL+"/ads/import",
 			body,
-			"user-42",
+			"00000000-0000-0000-0000-000000000042",
 			"import-123",
 		)
 
@@ -359,7 +464,7 @@ func TestHandlerImportAds(t *testing.T) {
 			t,
 			srv.URL+"/ads/import",
 			body,
-			"user-1",
+			"00000000-0000-0000-0000-000000000001",
 			"import-123",
 		)
 
@@ -377,7 +482,7 @@ func TestHandlerImportAds(t *testing.T) {
 			calls++
 
 			assert.Equal(t, "empty-import-123", req.IdempotencyKey)
-			assert.Equal(t, domain.UserID("user-1"), req.OwnerID)
+			assert.Equal(t, domain.UserID("00000000-0000-0000-0000-000000000001"), req.OwnerID)
 			assert.Empty(t, req.Ads)
 
 			return []domain.AdID{}, nil
@@ -388,7 +493,7 @@ func TestHandlerImportAds(t *testing.T) {
 			t,
 			srv.URL+"/ads/import",
 			importAdsBody{Ads: []createAdBody{}},
-			"user-1",
+			"00000000-0000-0000-0000-000000000001",
 			"empty-import-123",
 		)
 
@@ -424,7 +529,7 @@ func TestHandlerImportAds(t *testing.T) {
 			t,
 			srv.URL+"/ads/import",
 			body,
-			"user-1",
+			"00000000-0000-0000-0000-000000000001",
 			strings.Repeat("a", 256),
 		)
 

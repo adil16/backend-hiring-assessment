@@ -8,6 +8,7 @@ This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) an
 
 | Type | Description |
 |---|---|
+| Added | HTTP input validation for ad titles, photo URLs, user UUIDs and price filters, with whitespace normalization. |
 | Added | Introduced Docker Compose end-to-end tests covering authentication, ad lifecycle, ownership, bulk import idempotency, and publication quotas, with a dedicated CI job. |
 | Added | Introduced structured JSON logging with configurable log levels via `LOG_LEVEL`. |
 | Added | Enforced a maximum of 5 ad publications per rolling 24-hour window through `POST /ads`. |

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/domain"
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/ads/internal/cmd/ads-api/usecase"
@@ -48,6 +49,11 @@ func handlerImportAds(importAds usecase.ImportAdsFunc) http.HandlerFunc {
 		ads := make([]usecase.CreateAdRequest, 0, len(body.Ads))
 
 		for _, item := range body.Ads {
+			if err := item.validateFields(); err != nil {
+				rw.WriteHeader(http.StatusBadRequest)
+				return
+			}
+
 			priceCents, err := item.priceInCents()
 			if err != nil {
 				rw.WriteHeader(http.StatusBadRequest)
@@ -55,9 +61,9 @@ func handlerImportAds(importAds usecase.ImportAdsFunc) http.HandlerFunc {
 			}
 
 			ads = append(ads, usecase.CreateAdRequest{
-				Title:      item.Title,
+				Title:      strings.TrimSpace(item.Title),
 				PriceCents: priceCents,
-				PhotoURL:   item.PhotoURL,
+				PhotoURL:   strings.TrimSpace(item.PhotoURL),
 				OwnerID:    ownerID,
 			})
 		}

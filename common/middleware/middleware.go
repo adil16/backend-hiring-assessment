@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.mpi-internal.com/leboncoin/backend-hiring-assessment/common/model"
 )
 
@@ -38,4 +39,18 @@ func UserIDFromRequest(r *http.Request) model.UserID {
 	userID, _ := r.Context().Value(contextKeyUserID).(model.UserID)
 
 	return userID
+}
+
+// RequireValidUUIDUserID rejects malformed user IDs.
+func RequireValidUUIDUserID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		userID := UserIDFromRequest(r)
+
+		if _, err := uuid.Parse(userID.String()); err != nil {
+			rw.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		next.ServeHTTP(rw, r)
+	})
 }

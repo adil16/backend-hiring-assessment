@@ -18,7 +18,7 @@ import (
 
 func newDeleteAdServer(fn usecase.DeleteAdByIDFunc) *httptest.Server {
 	mux := http.NewServeMux()
-	mux.Handle("DELETE /ads/{adID}", middleware.RequireAuth(handlerDeleteAd(fn)))
+	mux.Handle("DELETE /ads/{adID}", middleware.RequireAuth(middleware.RequireValidUUIDUserID(handlerDeleteAd(fn))))
 	return httptest.NewServer(mux)
 }
 
@@ -27,7 +27,7 @@ func TestHandlerDeleteAd(t *testing.T) {
 	t.Run("returns 200 on success", func(t *testing.T) {
 		srv := newDeleteAdServer(func(_ context.Context, id domain.AdID, userID domain.UserID) error {
 			assert.Equal(t, domain.AdID(42), id)
-			assert.Equal(t, domain.UserID("123"), userID)
+			assert.Equal(t, domain.UserID("00000000-0000-0000-0000-000000000123"), userID)
 			return nil
 		})
 		t.Cleanup(srv.Close)
@@ -38,7 +38,7 @@ func TestHandlerDeleteAd(t *testing.T) {
 			nil,
 		)
 		require.NoError(t, err)
-		req.Header.Set("Authorization", "123")
+		req.Header.Set("Authorization", "00000000-0000-0000-0000-000000000123")
 
 		resp, err := http.DefaultClient.Do(req)
 		requireHTTPResponse(t, resp, err)
@@ -65,6 +65,28 @@ func TestHandlerDeleteAd(t *testing.T) {
 		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 	})
 
+	t.Run("returns 400 when Authorization header contains an invalid UUID", func(t *testing.T) {
+		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID, _ domain.UserID) error {
+			t.Error("usecase should not be called")
+			return nil
+		})
+		t.Cleanup(srv.Close)
+
+		req, err := http.NewRequest(
+			http.MethodDelete,
+			srv.URL+"/ads/42",
+			nil,
+		)
+		require.NoError(t, err)
+
+		req.Header.Set("Authorization", "invaliduser")
+
+		resp, err := http.DefaultClient.Do(req)
+		requireHTTPResponse(t, resp, err)
+
+		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	})
+
 	t.Run("returns 400 when adID is not a number", func(t *testing.T) {
 		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID, userID domain.UserID) error {
 			t.Fatal("usecase should not be called")
@@ -78,7 +100,7 @@ func TestHandlerDeleteAd(t *testing.T) {
 			nil,
 		)
 		require.NoError(t, err)
-		req.Header.Set("Authorization", "123")
+		req.Header.Set("Authorization", "00000000-0000-0000-0000-000000000123")
 
 		resp, err := http.DefaultClient.Do(req)
 		requireHTTPResponse(t, resp, err)
@@ -98,7 +120,7 @@ func TestHandlerDeleteAd(t *testing.T) {
 			nil,
 		)
 		require.NoError(t, err)
-		req.Header.Set("Authorization", "123")
+		req.Header.Set("Authorization", "00000000-0000-0000-0000-000000000123")
 
 		resp, err := http.DefaultClient.Do(req)
 		requireHTTPResponse(t, resp, err)
@@ -108,7 +130,7 @@ func TestHandlerDeleteAd(t *testing.T) {
 
 	t.Run("returns 403 when ad does not belong to user", func(t *testing.T) {
 		srv := newDeleteAdServer(func(_ context.Context, _ domain.AdID, userID domain.UserID) error {
-			return fmt.Errorf("unable to delete ad 99: user 123 is not the owner: %w", domain.ErrForbidden)
+			return fmt.Errorf("unable to delete ad 99: user 00000000-0000-0000-0000-000000000123 is not the owner: %w", domain.ErrForbidden)
 		})
 		t.Cleanup(srv.Close)
 
@@ -118,7 +140,7 @@ func TestHandlerDeleteAd(t *testing.T) {
 			nil,
 		)
 		require.NoError(t, err)
-		req.Header.Set("Authorization", "123")
+		req.Header.Set("Authorization", "00000000-0000-0000-0000-000000000123")
 
 		resp, err := http.DefaultClient.Do(req)
 		requireHTTPResponse(t, resp, err)
@@ -138,7 +160,7 @@ func TestHandlerDeleteAd(t *testing.T) {
 			nil,
 		)
 		require.NoError(t, err)
-		req.Header.Set("Authorization", "123")
+		req.Header.Set("Authorization", "00000000-0000-0000-0000-000000000123")
 
 		resp, err := http.DefaultClient.Do(req)
 		requireHTTPResponse(t, resp, err)

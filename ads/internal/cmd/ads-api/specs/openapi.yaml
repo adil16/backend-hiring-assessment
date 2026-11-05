@@ -33,9 +33,10 @@ paths:
           example: bike
         - name: user_id
           in: query
-          description: Filter ads belonging to this owner.
+          description: Filter ads belonging to this owner. Must be a valid UUID.
           schema:
             type: string
+            format: uuid
           example: "00000000-0000-0000-0000-000000000001"
         - name: min_price_cents
           in: query
@@ -61,7 +62,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ListAdsResponse"
         "400":
-          description: Invalid query parameter (e.g. non-numeric price).
+          description: Invalid query parameter (e.g. malformed user_id UUID, non-numeric or negative price).
         "500":
           description: Unexpected server or database error.
     
@@ -97,7 +98,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/CreateAdResponse"
         "400":
-          description: Invalid request body, including missing, negative, non-representable, or conflicting price fields (both `price` and `price_cents` provided).
+          description: Invalid request body or malformed Authorization UUID (e.g. invalid title, photo URI, price, or conflicting price fields).
         "401":
           description: Missing Authorization header.
         "429":
@@ -185,7 +186,8 @@ paths:
 
         "400":
           description: |
-            Invalid request body, price, or idempotency key.
+            Invalid request body, title, photo URI, price, idempotency key,
+            or malformed Authorization UUID.
 
         "401":
           description: Missing Authorization header.
@@ -246,7 +248,7 @@ paths:
         "200":
           description: The ad was deleted.
         "400":
-          description: adID is not a valid integer.
+          description: adID is not a valid integer, or the Authorization header contains a malformed UUID.
         "401":
           description: Missing Authorization header.
         "403":
@@ -262,7 +264,10 @@ components:
       type: apiKey
       in: header
       name: Authorization
-      description: The caller's user ID. No token validation is performed — the value is used as-is as the owner identifier.
+      description: |
+        The caller's user ID, provided as a UUID in the Authorization header.
+        This is not a bearer token; no token validation is performed.
+        A missing header returns 401 and a malformed UUID returns 400.
 
   schemas:
     Ad:
@@ -328,6 +333,9 @@ components:
       properties:
         title:
           type: string
+          minLength: 1
+          maxLength: 200
+          description: Ad's title
           example: mountain bike
         price:
           type: number
@@ -343,6 +351,10 @@ components:
           example: 14999
         photo_url:
           type: string
+          format: uri
+          minLength: 1
+          maxLength: 2048
+          description: URI referencing the ad's photo.
           example: https://example.com/bike.jpg
 
     CreateAdResponse:
