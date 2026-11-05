@@ -193,6 +193,8 @@ Users can publish at most **5 ads within a rolling 24-hour window** through `POS
 - Deleting an ad does not restore the publication quota.
 - Bulk imports through `POST /ads/import` are exempt from the quota and do not count towards it.
 
+**Historical data retention:** Publication records older than 24 hours are excluded from quota calculations but are not automatically deleted. In production, a scheduled cleanup job could periodically remove expired records to prevent unbounded table growth.
+
 ### Implementation
 
 Publication events are stored in a dedicated PostgreSQL `ad_publications` table, independently of the ads themselves.
