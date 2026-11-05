@@ -87,12 +87,12 @@ func TestHandlerListAds(t *testing.T) {
 		})
 		t.Cleanup(srv.Close)
 
-		resp, err := http.Get(srv.URL + "/ads?title=bike&user_id=00000000-0000-0000-0000-000000000003&min_price_cents=1000&max_price_cents=50000")
+		resp, err := http.Get(srv.URL + "/ads?title=bike&user_id=AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA&min_price_cents=1000&max_price_cents=50000")
 		requireHTTPResponse(t, resp, err)
 
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Equal(t, "bike", received.Title)
-		assert.Equal(t, domain.UserID("00000000-0000-0000-0000-000000000003"), received.OwnerID)
+		assert.Equal(t, domain.UserID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), received.OwnerID)
 		assert.Equal(t, int64(1000), received.MinPriceCents)
 		assert.Equal(t, int64(50000), received.MaxPriceCents)
 	})

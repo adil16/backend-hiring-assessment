@@ -47,12 +47,13 @@ func handlerListAds(listAds usecase.ListAdsFunc) http.HandlerFunc {
 		}
 
 		if raw := q.Get("user_id"); raw != "" {
-			if _, err := uuid.Parse(raw); err != nil {
+			parsed, err := uuid.Parse(raw)
+			if err != nil {
 				rw.WriteHeader(http.StatusBadRequest)
 				return
 			}
 
-			req.OwnerID = domain.UserID(raw)
+			req.OwnerID = domain.UserID(parsed.String())
 		}
 
 		if raw := q.Get("min_price_cents"); raw != "" {

@@ -27,7 +27,7 @@ func TestHandlerDeleteAd(t *testing.T) {
 	t.Run("returns 200 on success", func(t *testing.T) {
 		srv := newDeleteAdServer(func(_ context.Context, id domain.AdID, userID domain.UserID) error {
 			assert.Equal(t, domain.AdID(42), id)
-			assert.Equal(t, domain.UserID("00000000-0000-0000-0000-000000000123"), userID)
+			assert.Equal(t, domain.UserID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), userID)
 			return nil
 		})
 		t.Cleanup(srv.Close)
@@ -38,7 +38,7 @@ func TestHandlerDeleteAd(t *testing.T) {
 			nil,
 		)
 		require.NoError(t, err)
-		req.Header.Set("Authorization", "00000000-0000-0000-0000-000000000123")
+		req.Header.Set("Authorization", "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")
 
 		resp, err := http.DefaultClient.Do(req)
 		requireHTTPResponse(t, resp, err)

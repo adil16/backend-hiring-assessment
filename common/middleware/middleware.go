@@ -46,11 +46,18 @@ func RequireValidUUIDUserID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		userID := UserIDFromRequest(r)
 
-		if _, err := uuid.Parse(userID.String()); err != nil {
+		parsed, err := uuid.Parse(userID.String())
+		if err != nil {
 			rw.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		next.ServeHTTP(rw, r)
+		ctx := context.WithValue(
+			r.Context(),
+			contextKeyUserID,
+			model.UserID(parsed.String()),
+		)
+
+		next.ServeHTTP(rw, r.WithContext(ctx))
 	})
 }

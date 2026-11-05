@@ -91,7 +91,7 @@ For the complete API contract, see the
 |---|---|---|
 | Ad found and user found | `200 OK` | Returns the ad with its username |
 | Ad not found | `404 Not Found` | Returns no ad |
-| Owner not found in the users service | `200 OK` | Returns the ad with an empty username |
+| Owner not found in the users service | `200 OK` | Returns the ad without the username field |
 | Users service failure | `500 Internal Server Error` | Returns an error instead of an incomplete response |
 | PostgreSQL failure | `500 Internal Server Error` | Returns an error |
 

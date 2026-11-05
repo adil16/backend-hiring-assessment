@@ -55,10 +55,10 @@ func TestHandlerCreateAd(t *testing.T) {
 		})
 		t.Cleanup(srv.Close)
 
-		resp := postJSON(t, srv.URL+"/ads", validBody, "00000000-0000-0000-0000-000000000042")
+		resp := postJSON(t, srv.URL+"/ads", validBody, "AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA")
 
 		assert.Equal(t, http.StatusCreated, resp.StatusCode)
-		assert.Equal(t, domain.UserID("00000000-0000-0000-0000-000000000042"), received.OwnerID)
+		assert.Equal(t, domain.UserID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"), received.OwnerID)
 		assert.Equal(t, "mountain bike", received.Title)
 		assert.Equal(t, int64(15000), received.PriceCents)
 		assert.Equal(t, "https://example.com/bike.jpg", received.PhotoURL)
@@ -80,7 +80,6 @@ func TestHandlerCreateAd(t *testing.T) {
 		}
 
 		resp := postJSON(t, srv.URL+"/ads", body, "00000000-0000-0000-0000-000000000001")
-		defer resp.Body.Close()
 
 		require.Equal(t, http.StatusCreated, resp.StatusCode)
 		assert.Equal(t, "mountain bike", received.Title)
@@ -107,7 +106,6 @@ func TestHandlerCreateAd(t *testing.T) {
 		t.Cleanup(srv.Close)
 
 		resp := postJSON(t, srv.URL+"/ads", validBody, "invaliduser")
-		defer resp.Body.Close()
 
 		assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	})
@@ -524,7 +522,6 @@ func TestHandlerCreateAd_InvalidFields(t *testing.T) {
 				body,
 				"00000000-0000-0000-0000-000000000001",
 			)
-			defer resp.Body.Close()
 
 			assert.Equal(t, http.StatusBadRequest, resp.StatusCode)
 			assert.False(t, called, "use case must not be called")
