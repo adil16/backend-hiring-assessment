@@ -195,6 +195,14 @@ func TestHandlerCreateAd_Price(t *testing.T) {
 			wantStatus: http.StatusBadRequest,
 		},
 		{
+			name: "rejects negative legacy price_cents",
+			body: map[string]any{
+				"title":       "bike",
+				"price_cents": -100,
+			},
+			wantStatus: http.StatusBadRequest,
+		},
+		{
 			name: "rejects price overflow",
 			body: map[string]any{
 				"title": "bike",
@@ -321,6 +329,13 @@ func TestCreateAdBody_PriceInCents(t *testing.T) {
 			name: "negative euros",
 			body: createAdBody{
 				Price: ptrJSONNumber("-1"),
+			},
+			wantErr: true,
+		},
+		{
+			name: "negative legacy price in cents",
+			body: createAdBody{
+				PriceCents: ptrInt64(-100),
 			},
 			wantErr: true,
 		},

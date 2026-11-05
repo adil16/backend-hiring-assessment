@@ -72,6 +72,9 @@ func (b createAdBody) priceInCents() (int64, error) {
 	}
 
 	if b.PriceCents != nil {
+		if *b.PriceCents < 0 {
+			return 0, errors.New("price cannot be negative")
+		}
 		return *b.PriceCents, nil
 	}
 
